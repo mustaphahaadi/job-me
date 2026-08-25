@@ -1,5 +1,5 @@
 {
-  "name": "@job-me/web",
+  "name": "job-me-root",
   "version": "0.0.1",
   "private": true,
   "type": "module",
