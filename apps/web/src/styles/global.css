@@ -1,0 +1,135 @@
+@import './tokens.css';
+
+/* ─── Reset ──────────────────────────────────────────────────────────────────*/
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────*/
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text);
+  background-color: var(--bg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────────*/
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+p {
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Data: counts, dates, scores, status tags */
+.font-data {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+/* All-caps labels */
+.label-caps {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────────*/
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ─── Focus ──────────────────────────────────────────────────────────────────*/
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Divider ────────────────────────────────────────────────────────────────*/
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────────*/
+
+@keyframes stage-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ─── Utility classes ────────────────────────────────────────────────────────*/
+
+.text-muted   { color: var(--text-muted); }
+.text-accent  { color: var(--accent); }
+.text-success { color: var(--success); }
+.text-pending { color: var(--pending); }
+.text-danger  { color: var(--danger); }
+
+.surface         { background-color: var(--surface); }
+.surface-raised  { background-color: var(--surface-raised); }
+
+.border-hairline { border: 1px solid var(--border); }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border-width: 0;
+}

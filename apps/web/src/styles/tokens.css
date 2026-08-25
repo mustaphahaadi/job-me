@@ -1,0 +1,61 @@
+/* ─── Design tokens ──────────────────────────────────────────────────────────
+   Exact values from §2 of the design spec. Do not add new color variables
+   or modify these hex values without updating the spec first.
+────────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Color */
+  --bg:             #12161C;
+  --surface:        #1A2028;
+  --surface-raised: #212832;
+  --border:         #2A323D;
+  --text:           #E8E6E1;
+  --text-muted:     #8B93A1;
+  --accent:         #5B8DBF;
+  --success:        #5FBF77;
+  --pending:        #D9A544;
+  --danger:         #C4685A;
+  --new:            #8B93A1;
+
+  /* Typography */
+  --font-ui:   'Inter', system-ui, sans-serif;
+  --font-data: 'JetBrains Mono', 'Courier New', monospace;
+
+  /* Type scale (px converted to rem) */
+  --text-xs:   0.75rem;   /* 12px — data/labels */
+  --text-sm:   0.875rem;  /* 14px — secondary */
+  --text-base: 1rem;      /* 16px — body / card titles */
+  --text-lg:   1.25rem;   /* 20px — section headings */
+  --text-xl:   1.5rem;    /* 24px — page headings */
+  --text-2xl:  2rem;      /* 32px — large headings */
+
+  /* Spacing (8px base unit) */
+  --space-1:  0.25rem;  /* 4px  */
+  --space-2:  0.5rem;   /* 8px  */
+  --space-3:  0.75rem;  /* 12px */
+  --space-4:  1rem;     /* 16px — card padding */
+  --space-6:  1.5rem;   /* 24px — section gap */
+  --space-8:  2rem;     /* 32px — page margin desktop */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+
+  /* Radius — fixed, not rounded-full */
+  --radius-card: 6px;
+  --radius-tag:  4px;
+
+  /* Motion */
+  --duration-drawer: 200ms;
+  --ease-drawer: ease-out;
+  --duration-pulse: 2s;
+
+  /* Layout */
+  --sidebar-width: 220px;
+  --drawer-width:  480px;
+  --page-margin:   var(--space-8);
+}
+
+@media (max-width: 900px) {
+  :root {
+    --page-margin: var(--space-4);
+  }
+}

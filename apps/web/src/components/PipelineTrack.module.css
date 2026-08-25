@@ -1,0 +1,65 @@
+.track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.stageWrapper {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.stageWrapper:first-child {
+  flex: 0 0 auto;
+}
+
+.connector {
+  flex: 1;
+  height: 1px;
+  min-width: 8px;
+}
+
+.dotWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Dot ────────────────────────────────────────────────────── */
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  flex-shrink: 0;
+}
+
+.full .dot {
+  width: 12px;
+  height: 12px;
+}
+
+.pulse {
+  animation: stage-pulse var(--duration-pulse, 2s) ease-in-out infinite;
+}
+
+/* ── Label (full variant only) ──────────────────────────────── */
+
+.label {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── Size modifiers ─────────────────────────────────────────── */
+
+.compact .dot {
+  width: 8px;
+  height: 8px;
+}
