@@ -9,7 +9,7 @@ import styles from './JobDetailDrawer.module.css';
 interface Props {
   job: Job | null;
   cvVersions: CvVersion[];
-  sourceName?: string;
+  sourceName?: string | undefined;
   onClose: () => void;
   onMarkApplied: (jobId: string) => void;
   onDismiss: (jobId: string) => void;

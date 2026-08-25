@@ -1,8 +1,9 @@
+import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Globe, FileText, Settings } from 'lucide-react';
 import styles from './AppShell.module.css';
 
-const NAV_LINKS = [
+const NAV_LINKS: Array<{ to: string; label: string; icon: React.ComponentType<{ size: number }>; end?: true }> = [
   { to: '/',         label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/sources',  label: 'Sources',   icon: Globe },
   { to: '/cv',       label: 'CV',        icon: FileText },
@@ -23,7 +24,7 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
-              end={end}
+              {...(end ? { end: true } : {})}
               id={`nav-${label.toLowerCase()}`}
               className={({ isActive }) =>
                 `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`

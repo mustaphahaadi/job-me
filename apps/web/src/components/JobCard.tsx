@@ -5,7 +5,7 @@ import styles from './JobCard.module.css';
 
 interface Props {
   job: Job;
-  sourceName?: string;
+  sourceName?: string | undefined;
   isSelected?: boolean;
   onClick: (job: Job) => void;
 }
