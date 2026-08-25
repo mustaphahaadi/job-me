@@ -1,0 +1,17 @@
+{
+  "name": "job-me",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @job-me/web dev",
+    "build": "pnpm --filter @job-me/web build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "pipeline": "pnpm --filter @job-me/scraper start"
+  }
+}

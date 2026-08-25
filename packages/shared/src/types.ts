@@ -1,0 +1,136 @@
+// ─── Pipeline status ──────────────────────────────────────────────────────────
+
+export type JobStatus =
+  | 'new'
+  | 'matched'
+  | 'auto_applied'
+  | 'manual_queue'
+  | 'responded'
+  | 'closed';
+
+export const JOB_STATUSES: JobStatus[] = [
+  'new',
+  'matched',
+  'auto_applied',
+  'manual_queue',
+  'responded',
+  'closed',
+];
+
+// ─── Data model ───────────────────────────────────────────────────────────────
+
+export interface Source {
+  id: string;
+  name: string;
+  type: 'api' | 'rss';
+  base_url: string;
+  query_params: Record<string, unknown>;
+  active: boolean;
+  last_scraped_at: string | null;
+  last_scrape_status: 'success' | 'failed' | null;
+  last_scrape_error: string | null;
+  created_at: string;
+}
+
+export interface CvVersion {
+  id: string;
+  label: string;
+  file_path: string;
+  role_tags: string[];
+  is_default_for: string[];
+  uploaded_at: string;
+}
+
+export interface MatchBreakdown {
+  title_match: { score: number; weight: number; matched_keywords: string[] };
+  skills_overlap: { score: number; weight: number; matched_skills: string[] };
+  seniority: { score: number; weight: number; detected_level: string | null };
+  location: { score: number; weight: number; accepted: boolean };
+  recency: { score: number; weight: number; days_old: number };
+  negative_keyword_hit: boolean;
+  negative_keywords_found: string[];
+  weights_version: string;
+}
+
+export interface Job {
+  id: string;
+  source_id: string | null;
+  title: string;
+  company: string | null;
+  url: string;
+  posted_date: string | null;
+  scraped_at: string;
+  description: string | null;
+  match_score: number | null;
+  match_breakdown: MatchBreakdown | null;
+  matched_keywords: string[];
+  status: JobStatus;
+  auto_apply_attempted_at: string | null;
+  auto_apply_result: 'success' | 'failed' | null;
+  auto_apply_error: string | null;
+  cv_version_id: string | null;
+  created_at: string;
+}
+
+export interface Application {
+  id: string;
+  job_id: string;
+  applied_at: string;
+  method: 'auto' | 'manual';
+  cv_version_id: string | null;
+}
+
+export interface Settings {
+  id: 1;
+  target_roles: string[];
+  days_posted_default: number;
+  auto_apply_score_threshold: number;
+}
+
+// ─── Scraper types ────────────────────────────────────────────────────────────
+
+export interface NormalizedJob {
+  title: string;
+  company: string | null;
+  url: string;
+  posted_date: string | null; // ISO date string YYYY-MM-DD
+  description: string | null;
+  raw_location: string | null;
+  raw_tags: string[];
+}
+
+// ─── Display helpers ──────────────────────────────────────────────────────────
+
+export const STATUS_DISPLAY: Record<JobStatus, string> = {
+  new: 'NEW',
+  matched: 'MATCHED',
+  auto_applied: 'AUTO-APPLIED',
+  manual_queue: 'MANUAL QUEUE',
+  responded: 'RESPONDED',
+  closed: 'CLOSED',
+};
+
+export const STATUS_COLOR_VAR: Record<JobStatus, string> = {
+  new: 'var(--new)',
+  matched: 'var(--accent)',
+  auto_applied: 'var(--success)',
+  manual_queue: 'var(--pending)',
+  responded: 'var(--accent)',
+  closed: 'var(--text-muted)',
+};
+
+// Pipeline track order — fixed, do not reorder.
+export const PIPELINE_TRACK: JobStatus[] = [
+  'new',
+  'matched',
+  'auto_applied', // shown as "AUTO-APPLIED / MANUAL QUEUE" in UI
+  'responded',
+  'closed',
+];
+
+/** Returns the index in the pipeline track a given status occupies. */
+export function pipelineIndex(status: JobStatus): number {
+  if (status === 'manual_queue') return 2; // same slot as auto_applied
+  const idx = PIPELINE_TRACK.indexOf(status);
+  return idx === -1 ? 0 : idx;
+}
