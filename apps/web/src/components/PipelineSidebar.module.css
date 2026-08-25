@@ -1,0 +1,134 @@
+/* ── Sidebar (desktop) ────────────────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  min-height: 100vh;
+  padding: var(--space-6) 0;
+}
+
+.logo {
+  font-family: var(--font-data);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 0 var(--space-4) var(--space-6);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.stageList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--space-2);
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-2) var(--space-2);
+}
+
+/* ── Stage button ─────────────────────────────────────────────── */
+
+.stageBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-card);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.stageBtn:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.active {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.stageDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stageName {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  flex: 1;
+}
+
+.stageCount {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  min-width: 20px;
+  text-align: right;
+}
+
+.countPending {
+  color: var(--pending);
+}
+
+/* ── Responsive: horizontal tabs below 900px ──────────────────── */
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-2) 0;
+    flex-direction: column;
+  }
+
+  .logo {
+    display: none;
+  }
+
+  .stageList {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: var(--space-1);
+    padding: 0 var(--space-4);
+    scrollbar-width: none;
+  }
+
+  .stageList::-webkit-scrollbar { display: none; }
+
+  .divider {
+    display: none;
+  }
+
+  .stageBtn {
+    white-space: nowrap;
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--border);
+  }
+
+  .active {
+    border-color: var(--accent);
+  }
+
+  .stageName {
+    font-size: var(--text-xs);
+  }
+}
