@@ -1,0 +1,91 @@
+.page { padding: var(--space-8); max-width: 660px; }
+.pageHeader { margin-bottom: var(--space-6); }
+.pageTitle { font-size: var(--text-xl); font-weight: 600; margin-bottom: var(--space-1); }
+.pageDesc { font-size: var(--text-sm); color: var(--text-muted); }
+
+.form { display: flex; flex-direction: column; gap: 0; }
+.section { padding: var(--space-6) 0; }
+.sectionTitle { font-size: var(--text-base); font-weight: 600; margin-bottom: var(--space-1); }
+.sectionDesc { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--space-3); }
+.divider { border: none; border-top: 1px solid var(--border); }
+
+/* ── Roles ───────────────────────────────────────────────────── */
+
+.roleList { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.roleTag {
+  display: flex; align-items: center; gap: var(--space-1);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-tag); padding: 3px var(--space-2);
+  font-size: var(--text-sm); color: var(--text);
+}
+.removeBtn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 14px; line-height: 1; padding: 0 0 1px;
+  transition: color 120ms ease;
+}
+.removeBtn:hover { color: var(--danger); }
+
+.addRoleRow { display: flex; gap: var(--space-2); }
+
+.input {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-card); color: var(--text);
+  font-family: var(--font-ui); font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3); flex: 1;
+  transition: border-color 120ms ease;
+}
+.input:focus { border-color: var(--accent); outline: none; }
+
+.addBtn {
+  background: transparent; border: 1px solid var(--border);
+  border-radius: var(--radius-card); font-family: var(--font-ui);
+  font-size: var(--text-sm); color: var(--text-muted);
+  padding: var(--space-2) var(--space-4); cursor: pointer;
+  white-space: nowrap; transition: border-color 120ms ease, color 120ms ease;
+}
+.addBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Sliders ─────────────────────────────────────────────────── */
+
+.sliderRow { display: flex; align-items: center; gap: var(--space-3); }
+.sliderUnit { font-size: var(--text-sm); color: var(--text-muted); }
+
+.range {
+  -webkit-appearance: none; appearance: none;
+  height: 4px; background: var(--border); border-radius: 2px;
+  outline: none; cursor: pointer; flex: 1;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
+}
+.range::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); cursor: pointer; border: none;
+}
+.rangeValue {
+  font-family: var(--font-data); font-size: var(--text-sm);
+  color: var(--accent); min-width: 40px; text-align: right;
+}
+
+/* ── Stub note ───────────────────────────────────────────────── */
+
+.stubNote {
+  font-size: var(--text-sm); color: var(--text-muted);
+  border: 1px dashed var(--border); border-radius: var(--radius-card);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* ── Save ────────────────────────────────────────────────────── */
+
+.saveRow { padding: var(--space-6) 0 0; }
+.saveBtn {
+  background: var(--accent); border: none; border-radius: var(--radius-card);
+  font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 500;
+  color: var(--bg); padding: var(--space-2) var(--space-6);
+  cursor: pointer; transition: background 120ms ease;
+}
+.saveBtn:hover:not(:disabled) { background: #4a7aac; }
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 900px) { .page { padding: var(--space-4); } }
