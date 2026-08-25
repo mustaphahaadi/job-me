@@ -1,0 +1,17 @@
+project_id = "your-supabase-project-ref"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+major_version = 15
+
+[storage]
+enabled = true
+
+[[storage.buckets]]
+name = "cv-files"
+public = false
