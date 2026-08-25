@@ -1,0 +1,324 @@
+/* ── Backdrop ────────────────────────────────────────────────── */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 22, 28, 0.6);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-drawer) var(--ease-drawer);
+}
+
+.backdropVisible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Drawer panel ────────────────────────────────────────────── */
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--drawer-width);
+  max-width: 100vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 50;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform var(--duration-drawer) var(--ease-drawer);
+  display: flex;
+  flex-direction: column;
+}
+
+.open {
+  transform: translateX(0);
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+
+.header {
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sourceName {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.closeBtn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.closeBtn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.jobTitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: var(--space-1);
+}
+
+.company {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--accent);
+}
+
+/* ── Sections ────────────────────────────────────────────────── */
+
+.section {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionTitle {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.totalScore {
+  font-family: var(--font-data);
+  font-size: var(--text-sm);
+  color: var(--accent);
+}
+
+.mutedText {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* ── Match breakdown ─────────────────────────────────────────── */
+
+.breakdownList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.breakdownRow {
+  display: grid;
+  grid-template-columns: 90px 1fr 120px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.breakdownLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.breakdownBar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.breakdownFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 300ms ease;
+}
+
+.breakdownVal {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.breakdownDetail {
+  grid-column: 2 / 4;
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.negativeNote {
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+/* ── CV select ───────────────────────────────────────────────── */
+
+.select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* ── Actions ─────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-card);
+  border: 1px solid;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: #4a7aac;
+  border-color: #4a7aac;
+}
+
+.btnSecondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btnSecondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btnDanger {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.btnDanger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ── Error block ─────────────────────────────────────────────── */
+
+.errorBlock {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--danger);
+  background: var(--bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-tag);
+  padding: var(--space-2) var(--space-3);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── Activity log ────────────────────────────────────────────── */
+
+.activityLog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.activityRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.activityLabel {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.activityValue {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+
+/* ── Description ─────────────────────────────────────────────── */
+
+.description {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
