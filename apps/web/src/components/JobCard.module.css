@@ -1,0 +1,95 @@
+.card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.card:hover {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.selected {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+/* ── Track row ────────────────────────────────────────────────*/
+
+.trackRow {
+  margin-bottom: var(--space-3);
+}
+
+/* ── Body ─────────────────────────────────────────────────────*/
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ── Title row ────────────────────────────────────────────────*/
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.company {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.tagSlot {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+/* ── Meta row ─────────────────────────────────────────────────*/
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.metaItem + .metaItem::before {
+  content: '·';
+  margin-right: var(--space-3);
+  color: var(--border);
+}

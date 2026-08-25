@@ -1,0 +1,14 @@
+.tag {
+  display: inline-block;
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: var(--radius-tag);
+  border: 1px solid;
+  background: transparent;
+  white-space: nowrap;
+  line-height: 1.4;
+}
