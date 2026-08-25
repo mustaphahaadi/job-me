@@ -1,0 +1,48 @@
+name: Scrape → Match → Auto-Apply
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    # Allows manual "Run now" trigger from the Sources page via GitHub API
+
+jobs:
+  pipeline:
+    name: Run pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers (Chromium for auto-apply)
+        run: npx playwright install --with-deps chromium
+        working-directory: packages/scraper
+
+      - name: Run pipeline (scrape → match → auto-apply)
+        run: pnpm pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Applicant credentials for auto-apply connectors
+          APPLICANT_FIRST_NAME: ${{ secrets.APPLICANT_FIRST_NAME }}
+          APPLICANT_LAST_NAME: ${{ secrets.APPLICANT_LAST_NAME }}
+          APPLICANT_EMAIL: ${{ secrets.APPLICANT_EMAIL }}
+          APPLICANT_PHONE: ${{ secrets.APPLICANT_PHONE }}
+          # Local path to CV file (download from Supabase Storage before use, or pre-commit)
+          CV_FILE_PATH: ${{ secrets.CV_FILE_PATH }}
