@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, RotateCcw, Search } from 'lucide-react';
 import type { Source } from '@job-me/shared';
 import styles from './FilterBar.module.css';
 
@@ -14,15 +14,22 @@ export interface FilterState {
 interface Props {
   sources: Source[];
   filters: FilterState;
+  defaultDaysOld?: number;
   onChange: (filters: FilterState) => void;
 }
 
 /**
  * Top filter bar — source multi-select, role keyword, days-old range, match score threshold.
  */
-export function FilterBar({ sources, filters, onChange }: Props) {
+export function FilterBar({ sources, filters, defaultDaysOld = 14, onChange }: Props) {
   const [sourceOpen, setSourceOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isFiltered =
+    filters.sourceIds.length > 0 ||
+    filters.roleKeyword.trim() !== '' ||
+    filters.minMatchScore > 0 ||
+    filters.maxDaysOld !== defaultDaysOld;
 
   // Click-outside to close the source dropdown
   useEffect(() => {
@@ -45,6 +52,16 @@ export function FilterBar({ sources, filters, onChange }: Props) {
       ? filters.sourceIds.filter(s => s !== id)
       : [...filters.sourceIds, id];
     update({ sourceIds: ids });
+  }
+
+  function resetFilters() {
+    onChange({
+      sourceIds: [],
+      roleKeyword: '',
+      maxDaysOld: defaultDaysOld,
+      minMatchScore: 0,
+      sortBy: 'scraped_at',
+    });
   }
 
   return (
@@ -88,15 +105,18 @@ export function FilterBar({ sources, filters, onChange }: Props) {
       {/* Role keyword */}
       <div className={styles.filterGroup}>
         <label className={styles.label} htmlFor="filter-keyword">Role keyword</label>
-        <input
-          id="filter-keyword"
-          className={styles.input}
-          type="search"
-          placeholder="e.g. DevOps"
-          value={filters.roleKeyword}
-          onChange={e => update({ roleKeyword: e.target.value })}
-          aria-label="Filter by role keyword"
-        />
+        <div className={styles.inputWrapper}>
+          <Search size={13} className={styles.searchIcon} />
+          <input
+            id="filter-keyword"
+            className={`${styles.input} ${styles.inputWithIcon}`}
+            type="search"
+            placeholder="e.g. DevOps"
+            value={filters.roleKeyword}
+            onChange={e => update({ roleKeyword: e.target.value })}
+            aria-label="Filter by role keyword"
+          />
+        </div>
       </div>
 
       {/* Days since posted */}
@@ -153,6 +173,21 @@ export function FilterBar({ sources, filters, onChange }: Props) {
           <option value="days_old">Days old</option>
         </select>
       </div>
+
+      {/* Reset button */}
+      {isFiltered && (
+        <div className={styles.filterGroup}>
+          <button
+            type="button"
+            className={styles.resetBtn}
+            onClick={resetFilters}
+            aria-label="Reset all filters"
+          >
+            <RotateCcw size={13} />
+            <span>Reset</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

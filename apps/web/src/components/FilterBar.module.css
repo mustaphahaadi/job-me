@@ -38,6 +38,19 @@
 
 /* ── Input ───────────────────────────────────────────────────── */
 
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: var(--space-2);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
 .input,
 .select {
   background: var(--bg);
@@ -50,6 +63,10 @@
   height: 32px;
   min-width: 140px;
   transition: border-color 120ms ease;
+}
+
+.inputWithIcon {
+  padding-left: 28px;
 }
 
 .input:focus,
@@ -167,9 +184,33 @@
   color: var(--text-muted);
 }
 
+/* ── Reset button ────────────────────────────────────────────── */
+
+.resetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.resetBtn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 @media (max-width: 900px) {
   .bar {
     padding: var(--space-3) var(--space-4);
     gap: var(--space-3);
   }
 }
+

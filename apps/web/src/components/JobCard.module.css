@@ -73,6 +73,39 @@
   padding-top: 2px;
 }
 
+/* ── Tag group ──────────────────────────────────────────────── */
+
+.tagGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.locationBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  padding: 1px 6px;
+}
+
+.keywordTag {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: var(--radius-tag);
+  padding: 1px 6px;
+}
+
 /* ── Meta row ─────────────────────────────────────────────────*/
 
 .meta {
@@ -80,6 +113,7 @@
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+  margin-top: 2px;
 }
 
 .metaItem {
@@ -88,8 +122,13 @@
   color: var(--text-muted);
 }
 
+.scoreVal {
+  font-weight: 500;
+}
+
 .metaItem + .metaItem::before {
   content: '·';
   margin-right: var(--space-3);
   color: var(--border);
 }
+
