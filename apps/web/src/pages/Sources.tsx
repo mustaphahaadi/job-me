@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { triggerScrapeNow } from '../lib/github';
 import styles from './Sources.module.css';
 
-type FormState = Omit<Source, 'id' | 'last_scraped_at' | 'last_scrape_status' | 'last_scrape_error' | 'created_at'>;
+type FormState = Omit<Source, 'id' | 'last_scraped_at' | 'last_scrape_status' | 'last_scrape_error' | 'consecutive_fail_count' | 'created_at'>;
 
 const EMPTY_FORM: FormState = {
   name: '',
