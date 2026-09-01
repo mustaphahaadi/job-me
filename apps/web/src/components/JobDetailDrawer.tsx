@@ -209,15 +209,17 @@ export function JobDetailDrawer({
               <h1 className={styles.jobTitle}>{job.title}</h1>
               {job.company && <p className={styles.company}>{job.company}</p>}
               {job.url && (
-                <a
-                  href={job.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.sourceLink}
-                  id="drawer-source-link"
-                >
-                  View original posting <ExternalLink size={12} />
-                </a>
+                <div className={styles.linkRow}>
+                  <a
+                    href={job.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.sourceLink}
+                    id="drawer-source-link"
+                  >
+                    View original posting <ExternalLink size={12} />
+                  </a>
+                </div>
               )}
             </div>
 

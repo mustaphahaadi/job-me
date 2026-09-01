@@ -243,8 +243,18 @@ export default function Dashboard() {
 
   const filteredJobs = applyFilters(jobs, filters, activeStatus);
   const counts = buildCounts(jobs);
-
   const sourceMap = Object.fromEntries(sources.map(s => [s.id, s.name]));
+
+  const activeStageTitle = activeStatus === null ? 'All Jobs' : (
+    activeStatus === 'new' ? 'New Jobs' :
+    activeStatus === 'matched' ? 'Matched Jobs' :
+    activeStatus === 'auto_applied' ? 'Auto-Applied Jobs' :
+    activeStatus === 'manual_queue' ? 'Manual Queue' :
+    activeStatus === 'responded' ? 'Responded Jobs' :
+    activeStatus === 'closed' ? 'Closed Jobs' : 'Jobs'
+  );
+
+  const highMatchCount = jobs.filter(j => (j.match_score ?? 0) >= 0.75).length;
 
   return (
     <div className={styles.layout}>
@@ -256,6 +266,34 @@ export default function Dashboard() {
 
       <div className={styles.main}>
         <FilterBar sources={sources} filters={filters} onChange={setFilters} />
+
+        {/* Summary Header Bar */}
+        <div className={styles.summaryBar}>
+          <div className={styles.summaryTitleGroup}>
+            <h1 className={styles.summaryTitle}>{activeStageTitle}</h1>
+            <span className={styles.summaryCount}>
+              {loading ? '…' : `${filteredJobs.length} ${filteredJobs.length === 1 ? 'job' : 'jobs'}`}
+            </span>
+          </div>
+
+          <div className={styles.summaryStats}>
+            <div className={styles.statPill} title="Jobs with match score >= 75%">
+              <span className={styles.statDot} style={{ background: 'var(--success)' }} />
+              <span className={styles.statLabel}>High match:</span>
+              <span className={styles.statVal}>{highMatchCount}</span>
+            </div>
+            <div className={styles.statPill} title="Jobs in manual review queue">
+              <span className={styles.statDot} style={{ background: 'var(--pending)' }} />
+              <span className={styles.statLabel}>Manual Queue:</span>
+              <span className={styles.statVal}>{counts.manual_queue ?? 0}</span>
+            </div>
+            <div className={styles.statPill} title="Jobs auto-applied by connector">
+              <span className={styles.statDot} style={{ background: 'var(--success)' }} />
+              <span className={styles.statLabel}>Auto-applied:</span>
+              <span className={styles.statVal}>{counts.auto_applied ?? 0}</span>
+            </div>
+          </div>
+        </div>
 
         <div className={styles.jobList}>
           {loading ? (

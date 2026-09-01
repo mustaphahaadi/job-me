@@ -107,6 +107,24 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+
+          {/* Preset Suggestions */}
+          <div className={styles.presetGroup}>
+            <span className={styles.presetLabel}>Quick add:</span>
+            {['Cloud Engineer', 'DevOps Engineer', 'SRE', 'Platform Engineer', 'AWS Instructor'].map(preset => (
+              !settings.target_roles.includes(preset) && (
+                <button
+                  key={preset}
+                  type="button"
+                  className={styles.presetChip}
+                  onClick={() => setSettings(s => ({ ...s, target_roles: [...s.target_roles, preset] }))}
+                >
+                  + {preset}
+                </button>
+              )
+            ))}
+          </div>
+
           <div className={styles.addRoleRow}>
             <input
               id="settings-add-role"
@@ -161,6 +179,24 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+
+          {/* Preset Suggestions */}
+          <div className={styles.presetGroup}>
+            <span className={styles.presetLabel}>Quick add:</span>
+            {['remote', 'uk', 'united kingdom', 'london'].map(preset => (
+              !(settings.accepted_locations ?? []).includes(preset) && (
+                <button
+                  key={preset}
+                  type="button"
+                  className={styles.presetChip}
+                  onClick={() => setSettings(s => ({ ...s, accepted_locations: [...(s.accepted_locations ?? []), preset] }))}
+                >
+                  + {preset}
+                </button>
+              )
+            ))}
+          </div>
+
           <div className={styles.addRoleRow}>
             <input
               id="settings-add-location"
@@ -194,6 +230,23 @@ export default function SettingsPage() {
             {(settings.negative_keywords ?? []).length === 0 && (
               <span className={styles.emptyNote}>No negative keywords configured.</span>
             )}
+          </div>
+
+          {/* Preset Suggestions */}
+          <div className={styles.presetGroup}>
+            <span className={styles.presetLabel}>Quick add:</span>
+            {['unpaid', 'clearance required', 'internship', 'volunteer'].map(preset => (
+              !(settings.negative_keywords ?? []).includes(preset) && (
+                <button
+                  key={preset}
+                  type="button"
+                  className={styles.presetChipDanger}
+                  onClick={() => setSettings(s => ({ ...s, negative_keywords: [...(s.negative_keywords ?? []), preset] }))}
+                >
+                  + {preset}
+                </button>
+              )
+            ))}
           </div>
           <div className={styles.addRoleRow}>
             <input

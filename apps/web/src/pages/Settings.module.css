@@ -50,6 +50,56 @@
 }
 .addBtn:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ── Preset suggestions ──────────────────────────────────────── */
+
+.presetGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.presetLabel {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.presetChip {
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-tag);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.presetChip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.presetChipDanger {
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-tag);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.presetChipDanger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 /* ── Seniority radio group ───────────────────────────────────── */
 
 .seniorityRow { display: flex; gap: var(--space-2); flex-wrap: wrap; }
