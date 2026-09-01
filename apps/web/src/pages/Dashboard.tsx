@@ -130,42 +130,114 @@ export default function Dashboard() {
 
   // ── Actions ───────────────────────────────────────────────────
 
+  /**
+   * Selects the best CV for a job by matching role tags against the job title.
+   * Mirrors the selectCv() logic in auto-apply.ts so manual and auto paths are consistent.
+   */
+  function selectCvForJob(jobTitle: string): CvVersion | null {
+    if (cvVersions.length === 0) return null;
+    const titleLower = jobTitle.toLowerCase();
+    const byRole = cvVersions.find(cv =>
+      cv.is_default_for.some(role => titleLower.includes(role.toLowerCase()))
+    );
+    return byRole ?? cvVersions[0] ?? null;
+  }
+
   const handleMarkApplied = useCallback(async (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
-    const cv = cvVersions[0];
-    await supabase.from('jobs').update({ status: 'matched' }).eq('id', jobId); // will transition on next pass
-    await supabase.from('applications').insert({
-      job_id: jobId,
-      method: 'manual',
-      cv_version_id: job.cv_version_id ?? cv?.id ?? null,
-    });
-    await supabase.from('jobs').update({ status: 'auto_applied' }).eq('id', jobId);
+    const cv = job.cv_version_id
+      ? (cvVersions.find(c => c.id === job.cv_version_id) ?? null)
+      : selectCvForJob(job.title);
+
+    // Optimistic update
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'auto_applied' } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'auto_applied' } : prev);
+
+    try {
+      await supabase.from('applications').insert({
+        job_id: jobId,
+        method: 'manual',
+        cv_version_id: cv?.id ?? null,
+      });
+      const { error } = await supabase.from('jobs')
+        .update({ status: 'auto_applied', cv_version_id: cv?.id ?? null })
+        .eq('id', jobId);
+      if (error) throw error;
+    } catch (err) {
+      // Revert optimistic update on failure
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status } : j));
+      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status } : prev);
+      console.error('[handleMarkApplied] failed:', err);
+      alert('Failed to mark as applied. Please try again.');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, cvVersions]);
 
   const handleDismiss = useCallback(async (jobId: string) => {
-    await supabase.from('jobs').update({ status: 'closed' }).eq('id', jobId);
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+
+    // Optimistic update
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'closed' } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'closed' } : prev);
-  }, []);
+
+    try {
+      const { error } = await supabase.from('jobs').update({ status: 'closed' }).eq('id', jobId);
+      if (error) throw error;
+    } catch (err) {
+      // Revert
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status } : j));
+      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status } : prev);
+      console.error('[handleDismiss] failed:', err);
+      alert('Failed to dismiss job. Please try again.');
+    }
+  }, [jobs]);
 
   const handleRequeue = useCallback(async (jobId: string) => {
-    await supabase.from('jobs').update({
-      status: 'matched',
-      auto_apply_result: null,
-      auto_apply_error: null,
-    }).eq('id', jobId);
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+
+    // Optimistic update
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'matched', auto_apply_result: null } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'matched', auto_apply_result: null } : prev);
-  }, []);
+
+    try {
+      const { error } = await supabase.from('jobs').update({
+        status: 'matched',
+        auto_apply_result: null,
+        auto_apply_error: null,
+      }).eq('id', jobId);
+      if (error) throw error;
+    } catch (err) {
+      // Revert
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status, auto_apply_result: job.auto_apply_result } : j));
+      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status, auto_apply_result: job.auto_apply_result } : prev);
+      console.error('[handleRequeue] failed:', err);
+      alert('Failed to re-queue job. Please try again.');
+    }
+  }, [jobs]);
 
   const handleSwapCv = useCallback(async (jobId: string, cvVersionId: string) => {
-    await supabase.from('jobs').update({ cv_version_id: cvVersionId || null }).eq('id', jobId);
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, cv_version_id: cvVersionId || null } : j));
-    setSelectedJob(prev => prev?.id === jobId ? { ...prev, cv_version_id: cvVersionId || null } : prev);
-  }, []);
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+    const newCvId = cvVersionId || null;
+
+    // Optimistic update
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, cv_version_id: newCvId } : j));
+    setSelectedJob(prev => prev?.id === jobId ? { ...prev, cv_version_id: newCvId } : prev);
+
+    try {
+      const { error } = await supabase.from('jobs').update({ cv_version_id: newCvId }).eq('id', jobId);
+      if (error) throw error;
+    } catch (err) {
+      // Revert
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, cv_version_id: job.cv_version_id } : j));
+      setSelectedJob(prev => prev?.id === jobId ? { ...prev, cv_version_id: job.cv_version_id } : prev);
+      console.error('[handleSwapCv] failed:', err);
+      alert('Failed to update CV selection. Please try again.');
+    }
+  }, [jobs]);
 
   // ── Derived data ──────────────────────────────────────────────
 

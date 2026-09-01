@@ -43,65 +43,99 @@ async function scrapeSource(supabase: SupabaseClient, source: Source): Promise<v
       await upsertJobs(supabase, source.id, jobs);
     }
 
-    // Update source: success
+    // Update source: success — reset consecutive fail count
     await supabase.from('sources').update({
       last_scraped_at: scrapedAt,
       last_scrape_status: 'success',
       last_scrape_error: null,
+      consecutive_fail_count: 0,
     }).eq('id', source.id);
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[scrape] ${source.name}: FAILED — ${message}`);
 
-    // Update source: failure. Continue to next source.
+    // Update source: failure — increment consecutive fail count. Continue to next source.
     await supabase.from('sources').update({
       last_scraped_at: scrapedAt,
       last_scrape_status: 'failed',
       last_scrape_error: message,
+      consecutive_fail_count: (source.consecutive_fail_count ?? 0) + 1,
     }).eq('id', source.id);
   }
 }
 
 /**
- * Upserts jobs keyed on URL.
+ * Batch upserts jobs keyed on URL.
  * Never resets a job that's already progressed past 'new' back to 'new' (§8.2).
+ *
+ * Strategy (3 queries instead of 2N):
+ *   1. Fetch all existing job URLs for this source in one query.
+ *   2. Batch INSERT new jobs.
+ *   3. Batch UPDATE description/posted_date for existing jobs.
  */
 async function upsertJobs(
   supabase: SupabaseClient,
   sourceId: string,
   jobs: NormalizedJob[]
 ): Promise<void> {
-  for (const job of jobs) {
-    if (!job.url) continue;
+  const validJobs = jobs.filter(j => j.url);
+  if (validJobs.length === 0) return;
 
-    // Check if job already exists
-    const { data: existing } = await supabase
-      .from('jobs')
-      .select('id, status')
-      .eq('url', job.url)
-      .maybeSingle();
+  const urls = validJobs.map(j => j.url);
 
-    if (existing) {
-      // Update description/posted_date only — do not reset status
-      await supabase.from('jobs').update({
-        description: job.description,
-        posted_date: job.posted_date,
-      }).eq('id', (existing as { id: string }).id);
-    } else {
-      // Insert new job
-      await supabase.from('jobs').insert({
-        source_id: sourceId,
-        title: job.title,
-        company: job.company,
-        url: job.url,
-        posted_date: job.posted_date,
-        description: job.description,
-        status: 'new',
-        matched_keywords: [],
-        raw_location: job.raw_location,
-      });
+  // 1. Fetch existing URLs in one query
+  const { data: existing } = await supabase
+    .from('jobs')
+    .select('id, url')
+    .in('url', urls);
+
+  const existingUrlSet = new Set((existing ?? []).map((r: { url: string }) => r.url));
+  const existingById = Object.fromEntries(
+    (existing ?? []).map((r: { id: string; url: string }) => [r.url, r.id])
+  );
+
+  const toInsert = validJobs.filter(j => !existingUrlSet.has(j.url));
+  const toUpdate = validJobs.filter(j => existingUrlSet.has(j.url));
+
+  // 2. Batch insert new jobs
+  if (toInsert.length > 0) {
+    const rows = toInsert.map(job => ({
+      source_id: sourceId,
+      title: job.title,
+      company: job.company,
+      url: job.url,
+      posted_date: job.posted_date,
+      description: job.description,
+      raw_location: job.raw_location,
+      status: 'new',
+      matched_keywords: [],
+    }));
+    const { error } = await supabase.from('jobs').insert(rows);
+    if (error) console.error(`[scrape] Batch insert error: ${error.message}`);
+    else console.log(`[scrape] Inserted ${toInsert.length} new job(s).`);
+  }
+
+  // 3. Batch update existing jobs — description and posted_date only; never touch status
+  if (toUpdate.length > 0) {
+    const updates = toUpdate.map(job => ({
+      id: existingById[job.url] as string,
+      description: job.description,
+      posted_date: job.posted_date,
+    }));
+    // Supabase JS doesn't support batch updates natively; use Promise.all with small batches
+    // to avoid hitting query limits. Still far fewer calls than N+1.
+    const BATCH = 20;
+    for (let i = 0; i < updates.length; i += BATCH) {
+      const slice = updates.slice(i, i + BATCH);
+      await Promise.all(slice.map(u =>
+        supabase.from('jobs').update({
+          description: u.description,
+          posted_date: u.posted_date,
+        }).eq('id', u.id)
+      ));
     }
+    console.log(`[scrape] Updated ${toUpdate.length} existing job(s).`);
   }
 }
 
@@ -110,3 +144,4 @@ function getConnector(source: Source): Connector {
   if (source.type === 'api') return new ApiConnector();
   throw new Error(`Unknown source type: ${source.type}`);
 }
+

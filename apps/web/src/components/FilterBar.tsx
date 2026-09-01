@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { Source } from '@job-me/shared';
 import styles from './FilterBar.module.css';
@@ -22,6 +22,19 @@ interface Props {
  */
 export function FilterBar({ sources, filters, onChange }: Props) {
   const [sourceOpen, setSourceOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Click-outside to close the source dropdown
+  useEffect(() => {
+    if (!sourceOpen) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setSourceOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [sourceOpen]);
 
   function update(partial: Partial<FilterState>) {
     onChange({ ...filters, ...partial });
@@ -39,7 +52,7 @@ export function FilterBar({ sources, filters, onChange }: Props) {
       {/* Source dropdown */}
       <div className={styles.filterGroup}>
         <label className={styles.label} htmlFor="filter-source-btn">Source</label>
-        <div className={styles.dropdown}>
+        <div className={styles.dropdown} ref={dropdownRef}>
           <button
             id="filter-source-btn"
             className={styles.dropdownTrigger}
@@ -143,3 +156,4 @@ export function FilterBar({ sources, filters, onChange }: Props) {
     </div>
   );
 }
+

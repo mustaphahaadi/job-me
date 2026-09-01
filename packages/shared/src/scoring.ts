@@ -175,10 +175,15 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
 
 /**
  * Derives ScoringOptions from a Settings row.
+ * Maps all known settings fields so callers don't need to pass extra options manually.
+ * extra overrides take precedence if provided.
  */
 export function optionsFromSettings(settings: Settings, extra?: Partial<ScoringOptions>): ScoringOptions {
   return {
     targetRoles: settings.target_roles,
+    negativeKeywords: settings.negative_keywords ?? [],
+    acceptedLocations: settings.accepted_locations ?? ['remote'],
+    targetSeniority: settings.target_seniority ?? 'mid',
     ...extra,
   };
 }

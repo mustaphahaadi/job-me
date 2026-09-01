@@ -29,6 +29,7 @@ export interface Source {
   last_scraped_at: string | null;
   last_scrape_status: 'success' | 'failed' | null;
   last_scrape_error: string | null;
+  consecutive_fail_count: number;
   created_at: string;
 }
 
@@ -61,6 +62,7 @@ export interface Job {
   posted_date: string | null;
   scraped_at: string;
   description: string | null;
+  raw_location: string | null;
   match_score: number | null;
   match_breakdown: MatchBreakdown | null;
   matched_keywords: string[];
@@ -85,6 +87,9 @@ export interface Settings {
   target_roles: string[];
   days_posted_default: number;
   auto_apply_score_threshold: number;
+  target_seniority?: 'junior' | 'mid' | 'senior' | 'any';
+  accepted_locations?: string[];
+  negative_keywords?: string[];
 }
 
 // ─── Scraper types ────────────────────────────────────────────────────────────
