@@ -124,11 +124,44 @@ export function JobDetailDrawer({
   // Focus trap and Escape key handling
   useEffect(() => {
     if (!job) return;
-    drawerRef.current?.focus();
+
+    // Move initial focus into the drawer (to the close button if possible, else the panel itself)
+    const firstFocusable = drawerRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    (firstFocusable ?? drawerRef.current)?.focus();
+
+    const FOCUSABLE_SELECTOR =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+
+      // Constrain Tab to elements inside the drawer
+      const panel = drawerRef.current;
+      if (!panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     }
+
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [job, onClose]);
@@ -176,15 +209,17 @@ export function JobDetailDrawer({
               <h1 className={styles.jobTitle}>{job.title}</h1>
               {job.company && <p className={styles.company}>{job.company}</p>}
               {job.url && (
-                <a
-                  href={job.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.sourceLink}
-                  id="drawer-source-link"
-                >
-                  View original posting <ExternalLink size={12} />
-                </a>
+                <div className={styles.linkRow}>
+                  <a
+                    href={job.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.sourceLink}
+                    id="drawer-source-link"
+                  >
+                    View original posting <ExternalLink size={12} />
+                  </a>
+                </div>
               )}
             </div>
 

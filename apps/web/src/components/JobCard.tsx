@@ -1,4 +1,5 @@
 import type { Job } from '@job-me/shared';
+import { MapPin } from 'lucide-react';
 import { PipelineTrack } from './PipelineTrack';
 import { StatusTag } from './StatusTag';
 import styles from './JobCard.module.css';
@@ -21,16 +22,27 @@ function formatScore(score: number | null): string {
   return (score * 100).toFixed(0) + '%';
 }
 
+function getScoreColor(score: number | null): string {
+  if (score === null) return 'var(--text-muted)';
+  if (score >= 0.75) return 'var(--success)';
+  if (score >= 0.5) return 'var(--accent)';
+  return 'var(--pending)';
+}
+
 /**
  * Job card — §4 layout:
  *   pipeline track (top)
  *   title + company
+ *   location + matched keywords tags
  *   source + posted date + match score (data font, muted)
- *   status tag (absolute, top-right)
+ *   status tag (top-right)
  *
  * Hover: border shifts to --accent, bg to --surface-raised. No scale/transform.
  */
 export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
+  const scoreColor = getScoreColor(job.match_score);
+  const keywords = job.matched_keywords ? job.matched_keywords.slice(0, 4) : [];
+
   return (
     <article
       id={`job-card-${job.id}`}
@@ -59,6 +71,23 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
           </div>
         </div>
 
+        {/* Location & Matched Keywords Tags */}
+        {(job.raw_location || keywords.length > 0) && (
+          <div className={styles.tagGroup}>
+            {job.raw_location && (
+              <span className={styles.locationBadge} title={`Location: ${job.raw_location}`}>
+                <MapPin size={10} />
+                <span>{job.raw_location}</span>
+              </span>
+            )}
+            {keywords.map(kw => (
+              <span key={kw} className={styles.keywordTag}>
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className={styles.meta}>
           {sourceName && (
             <span className={styles.metaItem}>{sourceName}</span>
@@ -67,7 +96,9 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
           {job.match_score !== null && (
             <span className={styles.metaItem}>
               Match&nbsp;
-              <span style={{ color: 'var(--text)' }}>{formatScore(job.match_score)}</span>
+              <span className={styles.scoreVal} style={{ color: scoreColor }}>
+                {formatScore(job.match_score)}
+              </span>
             </span>
           )}
         </div>
@@ -75,3 +106,4 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
     </article>
   );
 }
+

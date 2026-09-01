@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { triggerScrapeNow } from '../lib/github';
 import styles from './Sources.module.css';
 
-type FormState = Omit<Source, 'id' | 'last_scraped_at' | 'last_scrape_status' | 'last_scrape_error' | 'created_at'>;
+type FormState = Omit<Source, 'id' | 'last_scraped_at' | 'last_scrape_status' | 'last_scrape_error' | 'consecutive_fail_count' | 'created_at'>;
 
 const EMPTY_FORM: FormState = {
   name: '',
@@ -88,7 +88,7 @@ export default function Sources() {
   }
 
   const failedSources = sources.filter(s =>
-    s.last_scrape_status === 'failed'
+    s.consecutive_fail_count >= 3
   );
 
   return (
@@ -118,7 +118,7 @@ export default function Sources() {
           <p className={styles.empty}>No sources configured. Add a source to start scraping jobs.</p>
         ) : (
           sources.map(src => {
-            const failedThrice = src.last_scrape_status === 'failed';
+            const failedThrice = src.consecutive_fail_count >= 3;
             return (
               <div key={src.id} id={`source-${src.id}`} className={styles.sourceCard}>
                 <div className={styles.sourceTop}>

@@ -14,17 +14,11 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
     .single();
 
   if (!settingsData) throw new Error('[match] Settings row not found.');
-  const settings = settingsData as Settings & {
-    target_seniority?: string;
-    accepted_locations?: string[];
-    negative_keywords?: string[];
-  };
+  const settings = settingsData as Settings;
 
-  const scoringOptions = optionsFromSettings(settings, {
-    negativeKeywords: settings.negative_keywords ?? [],
-    acceptedLocations: settings.accepted_locations ?? ['remote'],
-    targetSeniority: (settings.target_seniority as 'junior' | 'mid' | 'senior' | 'any') ?? 'mid',
-  });
+  // optionsFromSettings now maps all settings fields (target_seniority, accepted_locations,
+  // negative_keywords) automatically — no manual extra spread needed.
+  const scoringOptions = optionsFromSettings(settings);
 
   // Fetch all 'new' jobs
   const { data: jobs, error } = await supabase
@@ -48,7 +42,7 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
       url: job.url,
       posted_date: job.posted_date,
       description: job.description,
-      raw_location: null,
+      raw_location: job.raw_location,   // was always null before — now reads the stored value
       raw_tags: [],
     };
 
@@ -73,3 +67,4 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
 
   console.log(`[match] Done. ${matched}/${jobs.length} job(s) matched.`);
 }
+
