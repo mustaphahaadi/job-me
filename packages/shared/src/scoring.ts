@@ -105,7 +105,18 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   }
 
   // ── Title match ─────────────────────────────────────────────────────────────
-  const matchedTitleKeywords = textContainsAny(titleLower, targetRoles.map(r => r.toLowerCase()));
+  // Domain role tokens for Cloud, DevOps, AWS Trainer, Platform, SRE
+  const DOMAIN_TITLE_TOKENS = [
+    'cloud', 'devops', 'dev ops', 'secops', 'devsecops', 'gitops',
+    'aws', 'platform', 'sre', 'site reliability', 'reliability',
+    'infrastructure', 'sysadmin', 'systems engineer', 'systems administrator',
+    'trainer', 'instructor', 'educator',
+  ];
+
+  const matchedTitleKeywords = textContainsAny(
+    titleLower,
+    [...targetRoles.map(r => r.toLowerCase()), ...DOMAIN_TITLE_TOKENS]
+  );
   const titleScore = matchedTitleKeywords.length > 0 ? 1.0 : 0.0;
 
   // ── Skills overlap ──────────────────────────────────────────────────────────
@@ -155,12 +166,17 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   const days = daysOld(job.posted_date);
 
   // ── Blended score ─────────────────────────────────────────────────────────
-  const blended =
+  let blended =
     titleScore * WEIGHTS.title_match +
     skillsScore * WEIGHTS.skills_overlap +
     seniorityScore * WEIGHTS.seniority +
     locationScore * WEIGHTS.location +
     recency * WEIGHTS.recency;
+
+  // Penalize jobs whose title doesn't match Cloud/DevOps domain target roles
+  if (titleScore === 0.0) {
+    blended *= 0.5;
+  }
 
   const breakdown: MatchBreakdown = {
     title_match: { score: titleScore, weight: WEIGHTS.title_match, matched_keywords: matchedTitleKeywords },

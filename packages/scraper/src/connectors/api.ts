@@ -1,14 +1,11 @@
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
+import { parseTitleAndCompany } from './rss.js';
 
 /**
  * Generic REST API connector skeleton.
  * Fetches from base_url with query_params as URL search params.
- * The response shape is source-specific — override the `parse` method per site.
- *
- * Example source config:
- *   base_url: "https://api.adzuna.com/v1/api/jobs/gb/search/1"
- *   query_params: { app_id: "...", app_key: "...", what: "DevOps Engineer", content-type: "application/json" }
+ * Supports standard REST endpoints including RemoteOK, Adzuna, Reed, etc.
  */
 export class ApiConnector implements Connector {
   async fetch(source: Source): Promise<NormalizedJob[]> {
@@ -31,9 +28,8 @@ export class ApiConnector implements Connector {
   }
 
   /**
-   * Override this method in site-specific connectors.
    * Default implementation: expects an array of job objects at the top level
-   * or in a `results`/`jobs` property.
+   * or in a `results`/`jobs`/`data` property.
    */
   protected parse(data: unknown): NormalizedJob[] {
     let items: unknown[] = [];
@@ -51,18 +47,36 @@ export class ApiConnector implements Connector {
   }
 
   protected normalizeItem(item: Record<string, unknown>): NormalizedJob {
+    const rawTitle = String(
+      item['position'] ??
+      item['title'] ??
+      item['job_title'] ??
+      item['role'] ??
+      item['name'] ??
+      ''
+    );
+
+    const rawCompany = typeof item['company'] === 'object' && item['company'] !== null
+      ? String((item['company'] as Record<string, unknown>)['display_name'] ?? (item['company'] as Record<string, unknown>)['name'] ?? '')
+      : String(item['company'] ?? item['company_name'] ?? item['employer'] ?? '');
+
+    const { title, company } = parseTitleAndCompany(rawTitle, rawCompany || null);
+
+    const rawUrl = String(item['url'] ?? item['redirect_url'] ?? item['apply_url'] ?? item['link'] ?? '');
+    const fullUrl = rawUrl.startsWith('/') ? `https://remoteok.com${rawUrl}` : rawUrl;
+
+    const rawDate = item['date'] ?? item['created'] ?? item['created_at'] ?? item['epoch'] ?? null;
+
     return {
-      title: String(item['title'] ?? item['job_title'] ?? ''),
-      company: typeof item['company'] === 'object'
-        ? String((item['company'] as Record<string, unknown>)['display_name'] ?? '')
-        : String(item['company'] ?? item['employer'] ?? ''),
-      url: String(item['redirect_url'] ?? item['url'] ?? item['apply_url'] ?? ''),
-      posted_date: item['created'] ? toIsoDate(String(item['created'])) : null,
-      description: String(item['description'] ?? item['summary'] ?? ''),
-      raw_location: typeof item['location'] === 'object'
+      title: title || 'Untitled Job',
+      company,
+      url: fullUrl,
+      posted_date: rawDate ? toIsoDate(String(rawDate)) : null,
+      description: String(item['description'] ?? item['summary'] ?? item['details'] ?? ''),
+      raw_location: typeof item['location'] === 'object' && item['location'] !== null
         ? String((item['location'] as Record<string, unknown>)['display_name'] ?? '')
-        : String(item['location'] ?? ''),
-      raw_tags: [],
+        : String(item['location'] ?? item['region'] ?? ''),
+      raw_tags: Array.isArray(item['tags']) ? item['tags'].map(String) : [],
     };
   }
 }

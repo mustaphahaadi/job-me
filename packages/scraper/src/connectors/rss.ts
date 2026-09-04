@@ -40,9 +40,12 @@ export class RssConnector implements Connector {
         (item['dc:date'] as string | undefined) ??
         null;
 
+      const rawCompany = extractCompany(item);
+      const { title, company } = parseTitleAndCompany(item.title, rawCompany);
+
       return {
-        title: item.title?.trim() ?? 'Untitled',
-        company: extractCompany(item),
+        title: title || 'Untitled Job',
+        company,
         url: item.link?.trim() ?? '',
         posted_date: rawDate ? toIsoDate(rawDate) : null,
         description: item.contentSnippet ?? item.content ?? null,
@@ -51,6 +54,51 @@ export class RssConnector implements Connector {
       };
     }).filter(j => j.url);
   }
+}
+
+export function parseTitleAndCompany(rawTitle: string | undefined, existingCompany: string | null): { title: string; company: string | null } {
+  if (!rawTitle || !rawTitle.trim()) {
+    return { title: 'Untitled Job', company: existingCompany };
+  }
+
+  let title = rawTitle.trim();
+  let company = existingCompany;
+
+  // Pattern 1: "Company Name: Job Title" (e.g. "Lemon.io: Senior DevOps Engineer")
+  if (title.includes(':')) {
+    const parts = title.split(':');
+    if (parts.length >= 2 && parts[0]!.trim().length > 0 && parts[1]!.trim().length > 0) {
+      if (!company) company = parts[0]!.trim();
+      title = parts.slice(1).join(':').trim();
+    }
+  }
+  // Pattern 2: "Job Title at Company Name" or "Job Title @ Company Name"
+  else if (/\s+(?:at|@)\s+/i.test(title)) {
+    const parts = title.split(/\s+(?:at|@)\s+/i);
+    if (parts.length >= 2 && parts[0]!.trim().length > 0 && parts[1]!.trim().length > 0) {
+      title = parts[0]!.trim();
+      if (!company) company = parts[1]!.trim();
+    }
+  }
+  // Pattern 3: "Job Title - Company Name" or "Company Name - Job Title"
+  else if (title.includes(' - ') || title.includes(' — ')) {
+    const parts = title.split(/\s+[-—]\s+/);
+    if (parts.length === 2 && parts[0]!.trim() && parts[1]!.trim()) {
+      const p0 = parts[0]!.trim();
+      const p1 = parts[1]!.trim();
+      if (!company) {
+        if (/engineer|developer|trainer|instructor|architect|admin|lead|specialist|sre|devops|cloud|platform/i.test(p0)) {
+          title = p0;
+          company = p1;
+        } else {
+          company = p0;
+          title = p1;
+        }
+      }
+    }
+  }
+
+  return { title, company };
 }
 
 function buildUrl(base: string, params: Record<string, string>): string {

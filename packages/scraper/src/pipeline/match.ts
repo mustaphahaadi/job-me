@@ -40,7 +40,7 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
 
     const { score, breakdown } = scoreJob(normalized, scoringOptions);
 
-    const newStatus = score > 0 ? 'matched' : 'new';
+    const newStatus = score >= 0.40 ? 'matched' : 'new';
     if (newStatus === 'matched') matched++;
 
     // Clamp to 'closed' if negative keyword hit
