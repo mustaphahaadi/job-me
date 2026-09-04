@@ -105,12 +105,12 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   }
 
   // ── Title match ─────────────────────────────────────────────────────────────
-  // Domain role tokens for Cloud, DevOps, AWS Trainer, Platform, SRE
+  // Domain role tokens strictly covering Cloud, DevOps, AWS, Platform, SRE, Infrastructure, Trainer & Instructor roles
   const DOMAIN_TITLE_TOKENS = [
     'cloud', 'devops', 'dev ops', 'secops', 'devsecops', 'gitops',
-    'aws', 'platform', 'sre', 'site reliability', 'reliability',
-    'infrastructure', 'sysadmin', 'systems engineer', 'systems administrator',
-    'trainer', 'instructor', 'educator',
+    'aws', 'azure', 'gcp', 'platform', 'sre', 'site reliability', 'reliability',
+    'infrastructure', 'infra', 'sysadmin', 'systems engineer', 'systems administrator',
+    'trainer', 'instructor', 'educator', 'technical trainer', 'technical instructor',
   ];
 
   const matchedTitleKeywords = textContainsAny(
@@ -173,9 +173,9 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     locationScore * WEIGHTS.location +
     recency * WEIGHTS.recency;
 
-  // Penalize jobs whose title doesn't match Cloud/DevOps domain target roles
+  // Strict domain filter: if title has no Cloud/DevOps/Trainer/Platform/SRE/AWS keywords, force score to 0
   if (titleScore === 0.0) {
-    blended *= 0.5;
+    blended = 0.0;
   }
 
   const breakdown: MatchBreakdown = {
