@@ -17,7 +17,7 @@ export async function runScrape(supabase: SupabaseClient): Promise<void> {
 
   if (error) throw new Error(`Failed to fetch sources: ${error.message}`);
   if (!sources || sources.length === 0) {
-    console.log('[scrape] No active sources.');
+    console.log('[scrape] No active sources found in database. Add job sources on the /sources page or insert rows into the sources table.');
     return;
   }
 

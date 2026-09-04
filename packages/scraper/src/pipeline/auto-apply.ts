@@ -1,4 +1,5 @@
-import type { SupabaseClient, Job, Settings, CvVersion } from '@job-me/shared';
+import type { SupabaseClient, Job, CvVersion } from '@job-me/shared';
+import { getOrInitSettings } from '@job-me/shared';
 import type { AutoApplyConnector } from '../auto-apply-connectors/base.js';
 import { GreenhouseConnector } from '../auto-apply-connectors/greenhouse.js';
 
@@ -22,9 +23,7 @@ function findConnector(jobUrl: string): AutoApplyConnector | null {
  * On failure: moves to manual_queue with error detail — never silently retries.
  */
 export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
-  const { data: settingsData } = await supabase.from('settings').select('*').eq('id', 1).single();
-  if (!settingsData) throw new Error('[auto-apply] Settings not found.');
-  const settings = settingsData as Settings;
+  const settings = await getOrInitSettings(supabase);
 
   const { data: cvVersions } = await supabase.from('cv_versions').select('*');
   const cvs = (cvVersions ?? []) as CvVersion[];

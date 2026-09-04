@@ -1,23 +1,15 @@
-import type { SupabaseClient, Job, Settings, NormalizedJob } from '@job-me/shared';
-import { scoreJob, optionsFromSettings } from '@job-me/shared';
+import type { SupabaseClient, Job, NormalizedJob } from '@job-me/shared';
+import { scoreJob, optionsFromSettings, getOrInitSettings } from '@job-me/shared';
 
 /**
  * Match pipeline step — §8.3.
  * Fetches all 'new' jobs, runs multi-signal scoring, updates status → 'matched' or leaves 'new'.
  */
 export async function runMatch(supabase: SupabaseClient): Promise<void> {
-  // Load settings for scoring options
-  const { data: settingsData } = await supabase
-    .from('settings')
-    .select('*')
-    .eq('id', 1)
-    .single();
+  // Load settings for scoring options safely
+  const settings = await getOrInitSettings(supabase);
 
-  if (!settingsData) throw new Error('[match] Settings row not found.');
-  const settings = settingsData as Settings;
-
-  // optionsFromSettings now maps all settings fields (target_seniority, accepted_locations,
-  // negative_keywords) automatically — no manual extra spread needed.
+  // optionsFromSettings maps all settings fields automatically
   const scoringOptions = optionsFromSettings(settings);
 
   // Fetch all 'new' jobs

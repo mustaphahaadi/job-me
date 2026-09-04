@@ -92,6 +92,16 @@ export interface Settings {
   negative_keywords?: string[];
 }
 
+export const DEFAULT_SETTINGS: Settings = {
+  id: 1,
+  target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor'],
+  days_posted_default: 14,
+  auto_apply_score_threshold: 0.75,
+  target_seniority: 'mid',
+  accepted_locations: ['remote'],
+  negative_keywords: [],
+};
+
 // ─── Scraper types ────────────────────────────────────────────────────────────
 
 export interface NormalizedJob {
