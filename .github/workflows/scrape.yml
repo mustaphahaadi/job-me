@@ -37,14 +37,14 @@ jobs:
       - name: Download active CV from Supabase Storage
         # Fetches the CV file that was uploaded via the /cv page.
         # The pipeline reads CV_FILE_PATH to find the PDF.
-        # Requires the Supabase Storage bucket to be named 'cvs' and the file named 'resume.pdf'.
+        # Requires the Supabase Storage bucket to be named 'cv-files' and the file named 'resume.pdf'.
         # Adjust the storage path if your bucket/filename differs.
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           curl -fsSL \
-            "${SUPABASE_URL}/storage/v1/object/cvs/resume.pdf" \
+            "${SUPABASE_URL}/storage/v1/object/cv-files/resume.pdf" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -o /tmp/resume.pdf
           echo "CV_FILE_PATH=/tmp/resume.pdf" >> "$GITHUB_ENV"
