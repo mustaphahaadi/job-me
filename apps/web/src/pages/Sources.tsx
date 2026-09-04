@@ -87,6 +87,19 @@ export default function Sources() {
     }
   }
 
+  async function handleRunAll() {
+    setTriggeringId('all');
+    try {
+      await triggerScrapeNow();
+      alert('Triggered pipeline scrape run for all active sources via GitHub Actions.');
+    } catch (err) {
+      console.error('[handleRunAll] failed:', err);
+      alert('Failed to trigger scrape run. Check VITE_GITHUB_PAT setting.');
+    } finally {
+      setTriggeringId(null);
+    }
+  }
+
   const failedSources = sources.filter(s =>
     s.consecutive_fail_count >= 3
   );
@@ -98,10 +111,22 @@ export default function Sources() {
           <h1 className={styles.pageTitle}>Sources</h1>
           <p className={styles.pageDesc}>Configure job boards to scrape. Each active source runs every 6 hours via GitHub Actions.</p>
         </div>
-        <button id="sources-add-btn" className={styles.addBtn} onClick={openAdd}>
-          <Plus size={14} />
-          Add source
-        </button>
+        <div className={styles.headerBtnGroup}>
+          <button
+            id="sources-run-all-btn"
+            className={styles.runAllBtn}
+            onClick={handleRunAll}
+            disabled={triggeringId === 'all'}
+            title="Trigger full scrape pipeline run for all active sources via GitHub Actions"
+          >
+            <Play size={14} />
+            {triggeringId === 'all' ? 'Triggering all…' : 'Run all sources'}
+          </button>
+          <button id="sources-add-btn" className={styles.addBtn} onClick={openAdd}>
+            <Plus size={14} />
+            Add source
+          </button>
+        </div>
       </div>
 
       {failedSources.length > 0 && (

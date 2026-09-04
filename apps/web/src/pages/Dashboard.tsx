@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Trash2 } from 'lucide-react';
 import type { Job, JobStatus, Source, CvVersion } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import { PipelineSidebar } from '../components/PipelineSidebar';
@@ -87,6 +88,43 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletingUnmatched, setDeletingUnmatched] = useState(false);
+
+  const handleDeleteUnmatched = useCallback(async () => {
+    const unmatchedJobs = jobs.filter(j => j.status === 'new' || (j.match_score ?? 0) < 0.40);
+    if (unmatchedJobs.length === 0) {
+      alert('No unmatched jobs found to delete.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${unmatchedJobs.length} unmatched job(s)?`)) {
+      return;
+    }
+
+    setDeletingUnmatched(true);
+    const unmatchedIds = unmatchedJobs.map(j => j.id);
+
+    // Optimistically remove from UI
+    setJobs(prev => prev.filter(j => !unmatchedIds.includes(j.id)));
+    if (selectedJob && unmatchedIds.includes(selectedJob.id)) {
+      setSelectedJob(null);
+    }
+
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .delete()
+        .in('id', unmatchedIds);
+      if (error) throw error;
+    } catch (err) {
+      console.error('[handleDeleteUnmatched] failed:', err);
+      alert('Failed to delete unmatched jobs. Refreshing...');
+      const { data } = await supabase.from('jobs').select('*').order('scraped_at', { ascending: false });
+      if (data) setJobs(data as Job[]);
+    } finally {
+      setDeletingUnmatched(false);
+    }
+  }, [jobs, selectedJob]);
 
   // ── Initial load ──────────────────────────────────────────────
   useEffect(() => {
@@ -292,6 +330,16 @@ export default function Dashboard() {
               <span className={styles.statLabel}>Auto-applied:</span>
               <span className={styles.statVal}>{counts.auto_applied ?? 0}</span>
             </div>
+            <button
+              id="dashboard-clear-unmatched-btn"
+              className={styles.deleteUnmatchedBtn}
+              onClick={handleDeleteUnmatched}
+              disabled={deletingUnmatched}
+              title="Delete all jobs with status='new' or match_score < 40%"
+            >
+              <Trash2 size={12} />
+              {deletingUnmatched ? 'Deleting…' : 'Delete unmatched jobs'}
+            </button>
           </div>
         </div>
 

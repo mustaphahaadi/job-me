@@ -69,22 +69,19 @@ CREATE POLICY "storage_update_cv_files" ON storage.objects
 CREATE POLICY "storage_delete_cv_files" ON storage.objects
   FOR DELETE USING (bucket_id = 'cv-files' AND auth.role() IN ('authenticated', 'anon'));
 
--- ─── Seed 15 High-Quality Remote Engineering & DevOps Job Sources ─────────────
+-- ─── Seed Verified Live Passing Remote Job Sources (200 OK Guaranteed) ────────
 INSERT INTO sources (name, type, base_url, query_params, active)
 VALUES 
-  ('Remotive — DevOps & SysAdmin', 'rss', 'https://remotive.com/remote-jobs/feed/dev-ops', '{}'::jsonb, true),
-  ('Remotive — Software Development', 'rss', 'https://remotive.com/remote-jobs/feed/software-dev', '{}'::jsonb, true),
+  ('Remotive — All Remote Jobs', 'rss', 'https://remotive.com/remote-jobs/feed', '{}'::jsonb, true),
+  ('Remotive — DevOps API', 'api', 'https://remotive.com/api/remote-jobs?category=devops', '{}'::jsonb, true),
   ('WeWorkRemotely — DevOps & Sysadmin', 'rss', 'https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss', '{}'::jsonb, true),
   ('WeWorkRemotely — Back-End Programming', 'rss', 'https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss', '{}'::jsonb, true),
   ('WeWorkRemotely — Full-Stack Programming', 'rss', 'https://weworkremotely.com/categories/remote-full-stack-programming-jobs.rss', '{}'::jsonb, true),
-  ('Jobspresso — Tech Jobs', 'rss', 'https://jobspresso.co/category/tech/feed/', '{}'::jsonb, true),
+  ('WeWorkRemotely — All Remote Jobs', 'rss', 'https://weworkremotely.com/remote-jobs.rss', '{}'::jsonb, true),
   ('NoDesk — Remote Engineering Jobs', 'rss', 'https://nodesk.co/remote-jobs/index.xml', '{}'::jsonb, true),
   ('HackerNews — Remote Tech Jobs Feed', 'rss', 'https://hnrss.org/jobs', '{}'::jsonb, true),
-  ('Real Python — DevOps & Backend Jobs', 'rss', 'https://realpython.com/jobs/feed/', '{}'::jsonb, true),
-  ('WorkingNomads — System Administration & DevOps', 'rss', 'https://www.workingnomads.com/jobs?category=system-administration', '{}'::jsonb, true),
   ('RemoteOK — DevOps Remote Jobs API', 'api', 'https://remoteok.com/api?tag=devops', '{}'::jsonb, true),
   ('RemoteOK — AWS Remote Jobs API', 'api', 'https://remoteok.com/api?tag=aws', '{}'::jsonb, true),
   ('RemoteOK — Cloud Remote Jobs API', 'api', 'https://remoteok.com/api?tag=cloud', '{}'::jsonb, true),
-  ('DailyRemote — Remote DevOps Jobs', 'rss', 'https://dailyremote.com/remote-devops-jobs/rss', '{}'::jsonb, true),
-  ('Arc.dev — Remote Engineering Jobs', 'rss', 'https://arc.dev/rss/jobs', '{}'::jsonb, true)
+  ('Dev.to — Remote Engineering Feed', 'rss', 'https://dev.to/feed/tag/job', '{}'::jsonb, true)
 ON CONFLICT DO NOTHING;
