@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node --loader ts-node/esm src/index.ts",
+    "db:clear": "node --loader ts-node/esm src/clear-db.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -8,6 +8,7 @@
     "build": "pnpm --filter @job-me/web build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "pipeline": "pnpm --filter @job-me/scraper start"
+    "pipeline": "pnpm --filter @job-me/scraper start",
+    "db:clear": "pnpm --filter @job-me/scraper db:clear"
   }
 }
