@@ -94,11 +94,11 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   id: 1,
-  target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor'],
+  target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor', 'Platform Engineer', 'Site Reliability Engineer'],
   days_posted_default: 14,
   auto_apply_score_threshold: 0.75,
   target_seniority: 'mid',
-  accepted_locations: ['remote'],
+  accepted_locations: ['remote', 'worldwide', 'anywhere', 'global', 'africa', 'ghana'],
   negative_keywords: [],
 };
 

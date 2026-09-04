@@ -144,6 +144,9 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     acceptedLocations.length === 0 ||
     acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase())) ||
     locationLower.includes('remote') ||
+    locationLower.includes('worldwide') ||
+    locationLower.includes('anywhere') ||
+    locationLower.includes('global') ||
     locationLower === '';
   const locationScore = locationAccepted ? 1.0 : 0.0;
 
