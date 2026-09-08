@@ -1,0 +1,21 @@
+name,type,base_url,query_params
+"Jobicy — Cloud (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""cloud"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Platform (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""platform"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — AWS (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""aws"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Kubernetes (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""kubernetes"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Infrastructure (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""infrastructure"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Linux (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""linux"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — DevOps (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""devops"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Terraform (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""terraform"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Python (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""python"",""count"":""50"",""geo"":""anywhere""}"
+"Jobicy — Docker (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""docker"",""count"":""50"",""geo"":""anywhere""}"
+"Arbeitnow — DevOps Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""devops engineer""}"
+"Arbeitnow — Cloud Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""cloud engineer""}"
+"Arbeitnow — Platform Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""platform engineer""}"
+"Arbeitnow — Site Reliability Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""site reliability engineer""}"
+"Arbeitnow — AWS Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""aws engineer""}"
+"We Work Remotely — DevOps & Sysadmin",rss,https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss,{}
+"We Work Remotely — Programming",rss,https://weworkremotely.com/categories/remote-programming-jobs.rss,{}
+"Remotive — DevOps",api,https://remotive.com/api/remote-jobs,"{""category"":""devops"",""limit"":""20""}"
+"RemoteOK — DevOps",api,https://remoteok.com/api,"{""tag"":""devops""}"
+"RemoteOK — Cloud",api,https://remoteok.com/api,"{""tag"":""cloud""}"

@@ -18,9 +18,11 @@ export class JobicyConnector implements Connector {
     const params = source.query_params as Record<string, string>;
     const url = new URL('https://jobicy.com/api/v2/remote-jobs');
 
-    url.searchParams.set('count', params['count'] ?? '20');
+    url.searchParams.set('count', params['count'] ?? '50');
     if (params['tag']) url.searchParams.set('tag', params['tag']);
     if (params['industry']) url.searchParams.set('industry', params['industry']);
+    // geo=anywhere restricts to jobs open worldwide — critical for African applicants
+    url.searchParams.set('geo', params['geo'] ?? 'anywhere');
 
     const res = await fetch(url.toString(), {
       headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; job-me-scraper/1.0)' },

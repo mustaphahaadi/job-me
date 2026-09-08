@@ -158,6 +158,9 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     locationLower.includes('worldwide') ||
     locationLower.includes('anywhere') ||
     locationLower.includes('global') ||
+    locationLower.includes('africa') ||
+    locationLower.includes('ghana') ||
+    locationLower.includes('emea') ||
     locationLower === '';
   const locationScore = locationAccepted ? 1.0 : 0.0;
 
