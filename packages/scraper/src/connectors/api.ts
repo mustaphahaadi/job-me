@@ -56,16 +56,18 @@ export class ApiConnector implements Connector {
     const rawUrl = String(item['url'] ?? item['redirect_url'] ?? item['apply_url'] ?? item['link'] ?? '');
     const fullUrl = rawUrl.startsWith('/') ? `https://remoteok.com${rawUrl}` : rawUrl;
 
-    // Jobicy uses epoch in 'epoch', RemoteOK uses 'epoch' too; Arbeitnow uses 'created_at' (unix)
-    const rawDate = item['pubDate'] ?? item['date'] ?? item['created'] ?? item['created_at'] ?? item['epoch'] ?? null;
+    // Jobicy uses epoch in 'epoch', RemoteOK uses 'epoch' too; Arbeitnow uses 'created_at' (unix); Remotive uses 'publication_date'
+    const rawDate = item['pubDate'] ?? item['publication_date'] ?? item['date'] ?? item['created'] ?? item['created_at'] ?? item['epoch'] ?? null;
 
     const description = String(
       item['jobDescription'] ?? item['description'] ?? item['summary'] ?? item['details'] ?? item['jobExcerpt'] ?? ''
     );
 
-    // Jobicy uses 'jobGeo', Arbeitnow uses 'location', RemoteOK uses 'location'
+    // Jobicy uses 'jobGeo', Remotive uses 'candidate_required_location', Arbeitnow uses 'location', RemoteOK uses 'location'
     const rawLoc = String(
-      item['jobGeo'] ?? (
+      item['jobGeo'] ??
+      item['candidate_required_location'] ??
+      (
         typeof item['location'] === 'object' && item['location'] !== null
           ? (item['location'] as Record<string, unknown>)['display_name'] ?? ''
           : item['location'] ?? item['region'] ?? ''
