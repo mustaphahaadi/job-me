@@ -226,6 +226,29 @@
 
 .editBtn:hover { border-color: var(--text-muted); color: var(--text); }
 
+.deleteBtn {
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  color: var(--text-muted);
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.deleteBtn:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.deleteBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.formError {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  border-radius: var(--radius-tag);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
 /* ── Modal ───────────────────────────────────────────────────── */
 
 .modalBackdrop {

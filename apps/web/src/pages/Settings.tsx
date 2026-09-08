@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [newKeyword, setNewKeyword] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     void supabase.from('settings').select('*').eq('id', 1).single()
@@ -72,7 +73,8 @@ export default function SettingsPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from('settings').update({
+    setSaveError(null);
+    const { error } = await supabase.from('settings').update({
       target_roles: settings.target_roles,
       days_posted_default: settings.days_posted_default,
       auto_apply_score_threshold: settings.auto_apply_score_threshold,
@@ -81,8 +83,12 @@ export default function SettingsPage() {
       negative_keywords: settings.negative_keywords,
     }).eq('id', 1);
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (error) {
+      setSaveError(error.message);
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   }
 
   return (
@@ -324,6 +330,7 @@ export default function SettingsPage() {
 
         {/* ── Save ─────────────────────────────────────────────────── */}
         <div className={styles.saveRow}>
+          {saveError && <p className={styles.saveError}>{saveError}</p>}
           <button id="settings-save-btn" type="submit" className={styles.saveBtn} disabled={saving}>
             {saving ? 'Saving…' : saved ? 'Saved' : 'Save settings'}
           </button>

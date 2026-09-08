@@ -1,5 +1,5 @@
 import type { Job } from '@job-me/shared';
-import { MapPin } from 'lucide-react';
+import { MapPin, Clock } from 'lucide-react';
 import { PipelineTrack } from './PipelineTrack';
 import { StatusTag } from './StatusTag';
 import styles from './JobCard.module.css';
@@ -11,10 +11,19 @@ interface Props {
   onClick: (job: Job) => void;
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+function daysOld(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+}
+
+function ageBadge(dateStr: string | null): { label: string; color: string } | null {
+  const days = daysOld(dateStr);
+  if (days === null) return null;
+  if (days === 0) return { label: 'Today', color: 'var(--success)' };
+  if (days === 1) return { label: '1d ago', color: 'var(--success)' };
+  if (days <= 7) return { label: `${days}d ago`, color: 'var(--accent)' };
+  if (days <= 21) return { label: `${days}d ago`, color: 'var(--pending)' };
+  return { label: `${days}d ago`, color: 'var(--danger)' };
 }
 
 function formatScore(score: number | null): string {
@@ -92,11 +101,19 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
           {sourceName && (
             <span className={styles.metaItem}>{sourceName}</span>
           )}
-          <span className={styles.metaItem}>Posted {formatDate(job.posted_date)}</span>
+          {(() => {
+            const badge = ageBadge(job.posted_date);
+            return badge ? (
+              <span className={styles.metaItem}>
+                <Clock size={9} style={{ color: badge.color, marginRight: 2 }} />
+                <span style={{ color: badge.color }}>{badge.label}</span>
+              </span>
+            ) : null;
+          })()}
           {job.match_score !== null && (
             <span className={styles.metaItem}>
               Match&nbsp;
-              <span className={styles.scoreVal} style={{ color: scoreColor }}>
+              <span className={styles.scoreVal} style={{ color: getScoreColor(job.match_score) }}>
                 {formatScore(job.match_score)}
               </span>
             </span>

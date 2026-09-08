@@ -1,12 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Clock } from 'lucide-react';
 import type { Job, JobStatus, Source, CvVersion } from '@job-me/shared';
+import { selectCvForTitle } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import { PipelineSidebar } from '../components/PipelineSidebar';
 import { FilterBar, type FilterState } from '../components/FilterBar';
 import { JobCard } from '../components/JobCard';
 import { JobDetailDrawer } from '../components/JobDetailDrawer';
 import styles from './Dashboard.module.css';
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 const DEFAULT_FILTERS: FilterState = {
   sourceIds: [],
@@ -89,6 +100,7 @@ export default function Dashboard() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingUnmatched, setDeletingUnmatched] = useState(false);
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
 
   const handleDeleteUnmatched = useCallback(async () => {
     const unmatchedJobs = jobs.filter(j => j.status === 'new' || (j.match_score ?? 0) < 0.40);
@@ -136,7 +148,14 @@ export default function Dashboard() {
         supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false }),
       ]);
       if (jobsRes.data) setJobs(jobsRes.data as Job[]);
-      if (sourcesRes.data) setSources(sourcesRes.data as Source[]);
+      if (sourcesRes.data) {
+        setSources(sourcesRes.data as Source[]);
+        // Last pipeline run = most recent last_scraped_at across all sources
+        const times = (sourcesRes.data as Source[])
+          .map(s => s.last_scraped_at)
+          .filter(Boolean) as string[];
+        if (times.length > 0) setLastRunAt(times.sort().reverse()[0] ?? null);
+      }
       if (cvRes.data) setCvVersions(cvRes.data as CvVersion[]);
       setLoading(false);
     })();
@@ -169,16 +188,11 @@ export default function Dashboard() {
   // ── Actions ───────────────────────────────────────────────────
 
   /**
-   * Selects the best CV for a job by matching role tags against the job title.
-   * Mirrors the selectCv() logic in auto-apply.ts so manual and auto paths are consistent.
+   * Selects the best CV for a job — uses shared selectCvForTitle so
+   * manual and auto-apply paths are always consistent.
    */
-  function selectCvForJob(jobTitle: string): CvVersion | null {
-    if (cvVersions.length === 0) return null;
-    const titleLower = jobTitle.toLowerCase();
-    const byRole = cvVersions.find(cv =>
-      cv.is_default_for.some(role => titleLower.includes(role.toLowerCase()))
-    );
-    return byRole ?? cvVersions[0] ?? null;
+  function selectCv(jobTitle: string): CvVersion | null {
+    return selectCvForTitle(cvVersions, jobTitle);
   }
 
   const handleMarkApplied = useCallback(async (jobId: string) => {
@@ -186,11 +200,13 @@ export default function Dashboard() {
     if (!job) return;
     const cv = job.cv_version_id
       ? (cvVersions.find(c => c.id === job.cv_version_id) ?? null)
-      : selectCvForJob(job.title);
+      : selectCv(job.title);
 
-    // Optimistic update
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'auto_applied' } : j));
-    setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'auto_applied' } : prev);
+    // Manual apply → 'responded' (distinct from auto_applied)
+    const nextStatus: JobStatus = 'responded';
+
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: nextStatus } : j));
+    setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: nextStatus } : prev);
 
     try {
       await supabase.from('applications').insert({
@@ -199,11 +215,10 @@ export default function Dashboard() {
         cv_version_id: cv?.id ?? null,
       });
       const { error } = await supabase.from('jobs')
-        .update({ status: 'auto_applied', cv_version_id: cv?.id ?? null })
+        .update({ status: nextStatus, cv_version_id: cv?.id ?? null })
         .eq('id', jobId);
       if (error) throw error;
     } catch (err) {
-      // Revert optimistic update on failure
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status } : j));
       setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status } : prev);
       console.error('[handleMarkApplied] failed:', err);
@@ -315,6 +330,13 @@ export default function Dashboard() {
           </div>
 
           <div className={styles.summaryStats}>
+            {lastRunAt && (
+              <div className={styles.statPill} title={`Last pipeline run: ${new Date(lastRunAt).toLocaleString('en-GB')}`}>
+                <Clock size={10} style={{ color: 'var(--text-muted)' }} />
+                <span className={styles.statLabel}>Last run:</span>
+                <span className={styles.statVal}>{formatRelativeTime(lastRunAt)}</span>
+              </div>
+            )}
             <div className={styles.statPill} title="Jobs with match score >= 75%">
               <span className={styles.statDot} style={{ background: 'var(--success)' }} />
               <span className={styles.statLabel}>High match:</span>

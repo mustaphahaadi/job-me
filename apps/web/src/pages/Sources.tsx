@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Play, AlertTriangle, CheckCircle, XCircle, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Play, AlertTriangle, CheckCircle, XCircle, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import type { Source } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import { triggerScrapeNow } from '../lib/github';
@@ -32,7 +32,9 @@ export default function Sources() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [paramStr, setParamStr] = useState('{}');
 
   useEffect(() => {
@@ -58,19 +60,34 @@ export default function Sources() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setSaveError(null);
     let params: Record<string, unknown> = {};
     try { params = JSON.parse(paramStr) as Record<string, unknown>; } catch { /* leave empty */ }
 
     const payload = { ...form, query_params: params };
     if (editId) {
-      const { data } = await supabase.from('sources').update(payload).eq('id', editId).select().single();
+      const { data, error } = await supabase.from('sources').update(payload).eq('id', editId).select().single();
+      if (error) { setSaveError(error.message); setSaving(false); return; }
       if (data) setSources(prev => prev.map(s => s.id === editId ? data as Source : s));
     } else {
-      const { data } = await supabase.from('sources').insert(payload).select().single();
+      const { data, error } = await supabase.from('sources').insert(payload).select().single();
+      if (error) { setSaveError(error.message); setSaving(false); return; }
       if (data) setSources(prev => [...prev, data as Source]);
     }
     setSaving(false);
     setShowForm(false);
+  }
+
+  async function handleDelete(src: Source) {
+    if (!confirm(`Delete source "${src.name}"? This cannot be undone.`)) return;
+    setDeletingId(src.id);
+    const { error } = await supabase.from('sources').delete().eq('id', src.id);
+    if (error) {
+      alert(`Failed to delete: ${error.message}`);
+    } else {
+      setSources(prev => prev.filter(s => s.id !== src.id));
+    }
+    setDeletingId(null);
   }
 
   async function handleToggleActive(src: Source) {
@@ -173,6 +190,15 @@ export default function Sources() {
                         : <ToggleLeft size={18} style={{ color: 'var(--text-muted)' }} />}
                     </button>
                     <button
+                      id={`source-delete-${src.id}`}
+                      className={styles.deleteBtn}
+                      onClick={() => handleDelete(src)}
+                      disabled={deletingId === src.id}
+                      title="Delete source"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                    <button
                       id={`source-edit-${src.id}`}
                       className={styles.editBtn}
                       onClick={() => openEdit(src)}
@@ -215,6 +241,9 @@ export default function Sources() {
           <div className={styles.modal} role="dialog" aria-label={editId ? 'Edit source' : 'Add source'}>
             <h2 className={styles.modalTitle}>{editId ? 'Edit source' : 'Add source'}</h2>
             <form onSubmit={handleSubmit} className={styles.form}>
+              {saveError && (
+                <div className={styles.formError}>{saveError}</div>
+              )}
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="src-name">Name</label>
                 <input id="src-name" className={styles.input} required value={form.name}

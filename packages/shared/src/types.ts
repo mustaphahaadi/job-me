@@ -143,6 +143,14 @@ export const PIPELINE_TRACK: JobStatus[] = [
   'closed',
 ];
 
+/** Selects the best CV for a job title by checking is_default_for role tags. Shared between scraper and frontend. */
+export function selectCvForTitle(cvs: CvVersion[], jobTitle: string): CvVersion | null {
+  if (cvs.length === 0) return null;
+  const titleLower = jobTitle.toLowerCase();
+  const byRole = cvs.find(cv => cv.is_default_for.some(role => titleLower.includes(role.toLowerCase())));
+  return byRole ?? cvs[0] ?? null;
+}
+
 /** Returns the index in the pipeline track a given status occupies. */
 export function pipelineIndex(status: JobStatus): number {
   if (status === 'manual_queue') return 2; // same slot as auto_applied

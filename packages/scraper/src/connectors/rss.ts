@@ -1,6 +1,7 @@
 import Parser from 'rss-parser';
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
+import { buildUrl, toIsoDate, extractLocationFromText } from './utils.js';
 
 type RssItem = {
   title?: string;
@@ -43,13 +44,18 @@ export class RssConnector implements Connector {
       const rawCompany = extractCompany(item);
       const { title, company } = parseTitleAndCompany(item.title, rawCompany);
 
+      const description = item.contentSnippet ?? item.content ?? null;
+      const rawLocation = extractLocation(item)
+        ?? extractLocationFromText(item.title ?? '')
+        ?? extractLocationFromText(description ?? '');
+
       return {
         title: title || 'Untitled Job',
         company,
         url: item.link?.trim() ?? '',
         posted_date: rawDate ? toIsoDate(rawDate) : null,
-        description: item.contentSnippet ?? item.content ?? null,
-        raw_location: extractLocation(item),
+        description,
+        raw_location: rawLocation,
         raw_tags: item.categories ?? [],
       };
     }).filter(j => j.url);
@@ -101,21 +107,6 @@ export function parseTitleAndCompany(rawTitle: string | undefined, existingCompa
   return { title, company };
 }
 
-function buildUrl(base: string, params: Record<string, string>): string {
-  const entries = Object.entries(params).filter(([, v]) => v != null && v !== '');
-  if (entries.length === 0) return base;
-  const qs = new URLSearchParams(entries).toString();
-  return `${base}${base.includes('?') ? '&' : '?'}${qs}`;
-}
-
-function toIsoDate(raw: string): string {
-  try {
-    return new Date(raw).toISOString().slice(0, 10);
-  } catch {
-    return raw.slice(0, 10);
-  }
-}
-
 // Some RSS feeds embed company name in specific fields — extend as needed per source
 function extractCompany(item: RssItem): string | null {
   const raw = item['dc:publisher'] ?? item['author'] ?? null;
@@ -123,6 +114,6 @@ function extractCompany(item: RssItem): string | null {
 }
 
 function extractLocation(item: RssItem): string | null {
-  const raw = item['location'] ?? item['geo:lat'] ?? null;
+  const raw = item['location'] ?? item['job:location'] ?? item['georss:point'] ?? null;
   return typeof raw === 'string' ? raw.trim() : null;
 }

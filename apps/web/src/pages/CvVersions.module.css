@@ -57,6 +57,21 @@
 .cvLabel:hover { text-decoration: underline; }
 .cvMeta { font-family: var(--font-data); font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
 
+.deleteBtn {
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  color: var(--text-muted);
+  padding: 4px 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.deleteBtn:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.deleteBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .defaultRow { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .defaultLabel { font-size: var(--text-xs); color: var(--text-muted); }
 

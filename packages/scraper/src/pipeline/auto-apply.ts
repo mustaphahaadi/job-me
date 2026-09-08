@@ -1,13 +1,15 @@
 import type { SupabaseClient, Job, CvVersion } from '@job-me/shared';
-import { getOrInitSettings } from '@job-me/shared';
+import { getOrInitSettings, selectCvForTitle } from '@job-me/shared';
+import { sanitizeLog } from '../connectors/utils.js';
 import type { AutoApplyConnector } from '../auto-apply-connectors/base.js';
 import { GreenhouseConnector } from '../auto-apply-connectors/greenhouse.js';
+import { LeverConnector } from '../auto-apply-connectors/lever.js';
 
 // ─── Connector registry ───────────────────────────────────────────────────────
 // Add new ATS connectors here. Key = pattern to detect in the job URL.
 const AUTO_APPLY_CONNECTORS: Array<{ pattern: RegExp; connector: AutoApplyConnector }> = [
   { pattern: /greenhouse\.io|boards\.greenhouse\.io/, connector: new GreenhouseConnector() },
-  // { pattern: /lever\.co/, connector: new LeverConnector() },  // add when ready
+  { pattern: /jobs\.lever\.co|lever\.co\//, connector: new LeverConnector() },
 ];
 
 function findConnector(jobUrl: string): AutoApplyConnector | null {
@@ -57,11 +59,11 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
     if (!connector) {
       // No connector for this site — send to manual queue
       await supabase.from('jobs').update({ status: 'manual_queue' }).eq('id', job.id);
-      console.log(`[auto-apply] ${job.title} → no connector, moved to manual queue.`);
+      console.log(`[auto-apply] ${sanitizeLog(job.title)} → no connector, moved to manual queue.`);
       continue;
     }
 
-    const cv = selectCv(cvs, job.title);
+    const cv = selectCvForTitle(cvs, job.title);
     const now = new Date().toISOString();
 
     try {
@@ -81,12 +83,12 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
         cv_version_id: cv?.id ?? null,
       });
 
-      console.log(`[auto-apply] ${job.title} at ${job.company} → SUCCESS`);
+      console.log(`[auto-apply] ${sanitizeLog(job.title)} at ${sanitizeLog(job.company)} → SUCCESS`);
       attempted++;
 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[auto-apply] ${job.title} → FAILED: ${message}`);
+      console.error(`[auto-apply] ${sanitizeLog(job.title)} → FAILED: ${sanitizeLog(message)}`);
 
       // Failure — move to manual_queue, never leave in limbo
       await supabase.from('jobs').update({
@@ -103,17 +105,3 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
   console.log('[auto-apply] Done.');
 }
 
-/** Selects the best CV for a job title by checking is_default_for role tags. */
-function selectCv(cvs: CvVersion[], jobTitle: string): CvVersion | null {
-  if (cvs.length === 0) return null;
-  const titleLower = jobTitle.toLowerCase();
-
-  for (const cv of cvs) {
-    if (cv.is_default_for.some(role => titleLower.includes(role.toLowerCase()))) {
-      return cv;
-    }
-  }
-
-  // Fall back to first CV
-  return cvs[0] ?? null;
-}

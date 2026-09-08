@@ -1,5 +1,6 @@
 import type { SupabaseClient, Job, NormalizedJob } from '@job-me/shared';
 import { scoreJob, optionsFromSettings, getOrInitSettings } from '@job-me/shared';
+import { sanitizeLog } from '../connectors/utils.js';
 
 /**
  * Match pipeline step — §8.3.
@@ -40,7 +41,7 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
 
     const { score, breakdown } = scoreJob(normalized, scoringOptions);
 
-    const newStatus = score >= 0.40 ? 'matched' : 'new';
+    const newStatus = score >= 0.50 ? 'matched' : 'new'; // 0.50 = minimum to enter the active pipeline
     if (newStatus === 'matched') matched++;
 
     // Clamp to 'closed' if negative keyword hit
@@ -59,4 +60,3 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
 
   console.log(`[match] Done. ${matched}/${jobs.length} job(s) matched.`);
 }
-

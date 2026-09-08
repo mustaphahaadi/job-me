@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@job-me/shared';
 import type { Source, NormalizedJob } from '@job-me/shared';
 import { RssConnector } from '../connectors/rss.js';
 import { ApiConnector } from '../connectors/api.js';
+import { sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
 /**
@@ -37,7 +38,7 @@ async function scrapeSource(supabase: SupabaseClient, source: Source): Promise<v
     const connector = getConnector(source);
     const jobs = await connector.fetch(source);
 
-    console.log(`[scrape] ${source.name}: fetched ${jobs.length} job(s).`);
+    console.log(`[scrape] ${sanitizeLog(source.name)}: fetched ${jobs.length} job(s).`);
 
     if (jobs.length > 0) {
       await upsertJobs(supabase, source.id, jobs);
@@ -53,7 +54,7 @@ async function scrapeSource(supabase: SupabaseClient, source: Source): Promise<v
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[scrape] ${source.name}: FAILED — ${message}`);
+    console.error(`[scrape] ${sanitizeLog(source.name)}: FAILED — ${sanitizeLog(message)}`);
 
     // Update source: failure — increment consecutive fail count. Continue to next source.
     await supabase.from('sources').update({

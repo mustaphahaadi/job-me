@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Star } from 'lucide-react';
+import { Upload, Star, Trash2 } from 'lucide-react';
 import type { CvVersion } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import styles from './CvVersions.module.css';
@@ -18,6 +18,7 @@ function formatDate(dt: string): string {
 export default function CvVersions() {
   const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [roleTags, setRoleTags] = useState<string[]>([]);
   const [isDefaultFor, setIsDefaultFor] = useState<string[]>([]);
@@ -77,6 +78,20 @@ export default function CvVersions() {
       if (others.find(o => o.id === cv.id)) return { ...cv, is_default_for: cv.is_default_for.filter(r => r !== role) };
       return cv;
     }));
+  }
+
+  async function handleDelete(cv: CvVersion) {
+    if (!confirm(`Delete "${cv.label}"? This cannot be undone.`)) return;
+    setDeletingId(cv.id);
+    // Remove from storage
+    await supabase.storage.from('cv-files').remove([cv.file_path]);
+    const { error } = await supabase.from('cv_versions').delete().eq('id', cv.id);
+    if (error) {
+      alert(`Failed to delete: ${error.message}`);
+    } else {
+      setCvVersions(prev => prev.filter(c => c.id !== cv.id));
+    }
+    setDeletingId(null);
   }
 
   async function getSignedUrl(filePath: string) {
@@ -159,6 +174,14 @@ export default function CvVersions() {
                     {cv.role_tags.length > 0 && ` · ${cv.role_tags.join(', ')}`}
                   </div>
                 </div>
+                <button
+                  className={styles.deleteBtn}
+                  onClick={() => handleDelete(cv)}
+                  disabled={deletingId === cv.id}
+                  title="Delete CV"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
               <div className={styles.defaultRow}>
                 <span className={styles.defaultLabel}>Default for:</span>
