@@ -44,25 +44,33 @@ export class ApiConnector implements Connector {
 
   protected normalizeItem(item: Record<string, unknown>): NormalizedJob {
     const rawTitle = String(
-      item['position'] ?? item['title'] ?? item['job_title'] ?? item['role'] ?? item['name'] ?? ''
+      item['jobTitle'] ?? item['position'] ?? item['title'] ?? item['job_title'] ?? item['role'] ?? item['name'] ?? ''
     );
 
     const rawCompany = typeof item['company'] === 'object' && item['company'] !== null
       ? String((item['company'] as Record<string, unknown>)['display_name'] ?? (item['company'] as Record<string, unknown>)['name'] ?? '')
-      : String(item['company'] ?? item['company_name'] ?? item['employer'] ?? '');
+      : String(item['companyName'] ?? item['company'] ?? item['company_name'] ?? item['employer'] ?? '');
 
     const { title, company } = parseTitleAndCompany(rawTitle, rawCompany || null);
 
     const rawUrl = String(item['url'] ?? item['redirect_url'] ?? item['apply_url'] ?? item['link'] ?? '');
     const fullUrl = rawUrl.startsWith('/') ? `https://remoteok.com${rawUrl}` : rawUrl;
 
-    const rawDate = item['date'] ?? item['created'] ?? item['created_at'] ?? item['epoch'] ?? null;
+    // Jobicy uses epoch in 'epoch', RemoteOK uses 'epoch' too; Arbeitnow uses 'created_at' (unix)
+    const rawDate = item['pubDate'] ?? item['date'] ?? item['created'] ?? item['created_at'] ?? item['epoch'] ?? null;
 
-    const description = String(item['description'] ?? item['summary'] ?? item['details'] ?? '');
+    const description = String(
+      item['jobDescription'] ?? item['description'] ?? item['summary'] ?? item['details'] ?? item['jobExcerpt'] ?? ''
+    );
 
-    const rawLoc = typeof item['location'] === 'object' && item['location'] !== null
-      ? String((item['location'] as Record<string, unknown>)['display_name'] ?? '')
-      : String(item['location'] ?? item['region'] ?? '');
+    // Jobicy uses 'jobGeo', Arbeitnow uses 'location', RemoteOK uses 'location'
+    const rawLoc = String(
+      item['jobGeo'] ?? (
+        typeof item['location'] === 'object' && item['location'] !== null
+          ? (item['location'] as Record<string, unknown>)['display_name'] ?? ''
+          : item['location'] ?? item['region'] ?? ''
+      ) ?? ''
+    );
 
     const raw_location = rawLoc || extractLocationFromText(description) || '';
 

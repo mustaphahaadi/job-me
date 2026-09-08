@@ -12,12 +12,17 @@ type RssItem = {
   content?: string;
   'dc:date'?: string;
   categories?: string[];
+  // We Work Remotely custom fields
+  region?: string;
+  country?: string;
+  // Jobicy / generic
+  'job:location'?: string;
   [key: string]: unknown;
 };
 
 const parser = new Parser<Record<string, unknown>, RssItem>({
   customFields: {
-    item: ['dc:date', 'categories'],
+    item: ['dc:date', 'categories', 'region', 'country', 'job:location'],
   },
 });
 
@@ -114,6 +119,14 @@ function extractCompany(item: RssItem): string | null {
 }
 
 function extractLocation(item: RssItem): string | null {
+  // We Work Remotely uses <region> and <country>
+  if (item.region && typeof item.region === 'string' && item.region.trim()) {
+    return item.region.trim();
+  }
+  if (item.country && typeof item.country === 'string' && item.country.trim()) {
+    // Strip emoji flags (e.g. "🇨🇦 Canada" → "Canada")
+    return item.country.replace(/[\u{1F1E0}-\u{1F1FF}]{2}\s*/gu, '').trim();
+  }
   const raw = item['location'] ?? item['job:location'] ?? item['georss:point'] ?? null;
   return typeof raw === 'string' ? raw.trim() : null;
 }

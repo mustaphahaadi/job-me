@@ -252,9 +252,11 @@ export default function Sources() {
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="src-type">Type</label>
                 <select id="src-type" className={styles.select} value={form.type}
-                  onChange={e => setForm(f => ({ ...f, type: e.target.value as 'api' | 'rss' }))}>
+                  onChange={e => setForm(f => ({ ...f, type: e.target.value as Source['type'] }))}>
                   <option value="rss">RSS</option>
-                  <option value="api">API</option>
+                  <option value="api">API (Generic)</option>
+                  <option value="jobicy">Jobicy</option>
+                  <option value="arbeitnow">Arbeitnow</option>
                 </select>
               </div>
               <div className={styles.field}>

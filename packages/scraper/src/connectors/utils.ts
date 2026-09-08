@@ -6,6 +6,11 @@ export function buildUrl(base: string, params: Record<string, string>): string {
 }
 
 export function toIsoDate(raw: string): string {
+  // Handle Unix epoch integers (e.g. Arbeitnow created_at: 1788865797)
+  const asNum = Number(raw);
+  if (!isNaN(asNum) && asNum > 1_000_000_000 && asNum < 9_999_999_999) {
+    return new Date(asNum * 1000).toISOString().slice(0, 10);
+  }
   try { return new Date(raw).toISOString().slice(0, 10); }
   catch { return raw.slice(0, 10); }
 }

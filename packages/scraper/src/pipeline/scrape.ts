@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@job-me/shared';
 import type { Source, NormalizedJob } from '@job-me/shared';
 import { RssConnector } from '../connectors/rss.js';
 import { ApiConnector } from '../connectors/api.js';
+import { ArbeitnowConnector } from '../connectors/arbeitnow.js';
+import { JobicyConnector } from '../connectors/jobicy.js';
 import { sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
@@ -143,6 +145,8 @@ async function upsertJobs(
 function getConnector(source: Source): Connector {
   if (source.type === 'rss') return new RssConnector();
   if (source.type === 'api') return new ApiConnector();
+  if (source.type === 'arbeitnow') return new ArbeitnowConnector();
+  if (source.type === 'jobicy') return new JobicyConnector();
   throw new Error(`Unknown source type: ${source.type}`);
 }
 
