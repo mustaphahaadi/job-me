@@ -61,8 +61,19 @@ export default function Sources() {
     e.preventDefault();
     setSaving(true);
     setSaveError(null);
+    
+    // Validate JSON query params
     let params: Record<string, unknown> = {};
-    try { params = JSON.parse(paramStr) as Record<string, unknown>; } catch { /* leave empty */ }
+    try {
+      params = JSON.parse(paramStr) as Record<string, unknown>;
+      if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+        throw new Error('Query params must be a valid JSON object');
+      }
+    } catch (err) {
+      setSaveError('Invalid JSON in query params. Must be a valid JSON object, e.g., {"q": "devops", "l": "Remote"}');
+      setSaving(false);
+      return;
+    }
 
     const payload = { ...form, query_params: params };
     if (editId) {

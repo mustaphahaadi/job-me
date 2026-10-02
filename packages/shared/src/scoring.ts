@@ -161,13 +161,19 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   }
 
   // ── Location ──────────────────────────────────────────────────────────────
-  const ALWAYS_ACCEPTED = ['remote', 'worldwide', 'anywhere', 'global', 'emea'];
+  const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'fully remote', '100% remote', 'work from home', 'wfh'];
+  const isRemote = REMOTE_KEYWORDS.some(k => locationLower.includes(k));
+  
+  // Remote jobs always get full location score (priority)
+  // On-site jobs get full score only if location matches accepted_locations
   const locationAccepted =
+    isRemote ||
     acceptedLocations.length === 0 ||
     acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase())) ||
-    ALWAYS_ACCEPTED.some(t => locationLower.includes(t)) ||
     locationLower === '';
-  const locationScore = locationAccepted ? 1.0 : 0.0;
+  
+  // Give remote jobs a slight boost (1.0) vs on-site (0.9 if accepted, 0.0 if not)
+  const locationScore = isRemote ? 1.0 : (locationAccepted ? 0.9 : 0.0);
 
   // ── Recency ───────────────────────────────────────────────────────────────
   const recency = recencyScore(job.posted_date);

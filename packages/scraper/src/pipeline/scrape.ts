@@ -125,20 +125,15 @@ async function upsertJobs(
 
   // 3. Batch update existing jobs — description and posted_date only; never touch status
   if (toUpdate.length > 0) {
-    const updates = toUpdate.map(job => ({
-      id: existingById[job.url] as string,
-      description: job.description,
-      posted_date: job.posted_date,
-    }));
     const BATCH = 20;
     let updateErrors = 0;
-    for (let i = 0; i < updates.length; i += BATCH) {
-      const slice = updates.slice(i, i + BATCH);
+    for (let i = 0; i < toUpdate.length; i += BATCH) {
+      const slice = toUpdate.slice(i, i + BATCH);
       const results = await Promise.all(slice.map(u =>
         supabase.from('jobs').update({
           description: u.description,
           posted_date: u.posted_date,
-        }).eq('id', u.id)
+        }).eq('id', existingById[u.url] as string)
       ));
       for (const r of results) {
         if (r.error) {

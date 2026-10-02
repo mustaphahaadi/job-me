@@ -111,7 +111,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_apply_score_threshold: 0.75,
   max_auto_apply_per_run: 5,
   target_seniority: 'mid',
-  accepted_locations: ['remote', 'worldwide', 'anywhere', 'global'],
+  accepted_locations: ['remote', 'worldwide', 'anywhere', 'global', 'africa', 'west africa', 'east africa', 'south africa', 'nigeria', 'lagos', 'kenya', 'nairobi', 'ghana', 'accra', 'south africa', 'johannesburg', 'cape town', 'egypt', 'cairo', 'morocco', 'casablanca'],
   negative_keywords: [],
   skill_vocabulary: DEFAULT_SKILL_VOCABULARY,
 };

@@ -41,7 +41,7 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
 
     const { score, breakdown } = scoreJob(normalized, scoringOptions);
 
-    const newStatus = score >= 0.50 ? 'matched' : 'new'; // 0.50 = minimum to enter the active pipeline
+    const newStatus = score >= 0.75 ? 'matched' : 'new'; // 0.75 = minimum to enter the active pipeline (consistent with auto-apply threshold)
     if (newStatus === 'matched') matched++;
 
     // Clamp to 'closed' if negative keyword hit
