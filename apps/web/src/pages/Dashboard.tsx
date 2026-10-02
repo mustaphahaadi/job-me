@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Trash2, Clock } from 'lucide-react';
-import type { Job, JobStatus, Source, CvVersion } from '@job-me/shared';
+import { Trash2, Clock, CheckSquare, Square, X } from 'lucide-react';
+import type { Job, JobStatus, Source, CvVersion, Settings } from '@job-me/shared';
 import { selectCvForTitle } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import { PipelineSidebar } from '../components/PipelineSidebar';
@@ -30,13 +30,10 @@ const DEFAULT_FILTERS: FilterState = {
 function applyFilters(jobs: Job[], filters: FilterState, activeStatus: JobStatus | null): Job[] {
   let out = [...jobs];
 
-  if (activeStatus !== null) {
-    out = out.filter(j => j.status === activeStatus);
-  }
+  if (activeStatus !== null) out = out.filter(j => j.status === activeStatus);
 
-  if (filters.sourceIds.length > 0) {
+  if (filters.sourceIds.length > 0)
     out = out.filter(j => j.source_id && filters.sourceIds.includes(j.source_id));
-  }
 
   if (filters.roleKeyword.trim()) {
     const kw = filters.roleKeyword.toLowerCase();
@@ -48,30 +45,22 @@ function applyFilters(jobs: Job[], filters: FilterState, activeStatus: JobStatus
 
   if (filters.maxDaysOld < 90) {
     const cutoff = Date.now() - filters.maxDaysOld * 86400_000;
-    out = out.filter(j => {
-      if (!j.posted_date) return true;
-      return new Date(j.posted_date).getTime() >= cutoff;
-    });
+    out = out.filter(j => !j.posted_date || new Date(j.posted_date).getTime() >= cutoff);
   }
 
-  if (filters.minMatchScore > 0) {
+  if (filters.minMatchScore > 0)
     out = out.filter(j => (j.match_score ?? 0) >= filters.minMatchScore);
-  }
 
-  // Sort
   out.sort((a, b) => {
     switch (filters.sortBy) {
-      case 'posted_date':
-        return (b.posted_date ?? '').localeCompare(a.posted_date ?? '');
-      case 'match_score':
-        return (b.match_score ?? 0) - (a.match_score ?? 0);
+      case 'posted_date':  return (b.posted_date ?? '').localeCompare(a.posted_date ?? '');
+      case 'match_score':  return (b.match_score ?? 0) - (a.match_score ?? 0);
       case 'days_old': {
         const aAge = a.posted_date ? Date.now() - new Date(a.posted_date).getTime() : -1;
         const bAge = b.posted_date ? Date.now() - new Date(b.posted_date).getTime() : -1;
         return aAge - bAge;
       }
-      default:
-        return (b.scraped_at ?? '').localeCompare(a.scraped_at ?? '');
+      default: return (b.scraped_at ?? '').localeCompare(a.scraped_at ?? '');
     }
   });
 
@@ -80,17 +69,19 @@ function applyFilters(jobs: Job[], filters: FilterState, activeStatus: JobStatus
 
 function buildCounts(jobs: Job[]): Partial<Record<JobStatus, number>> {
   const counts: Partial<Record<JobStatus, number>> = {};
-  for (const job of jobs) {
-    counts[job.status] = (counts[job.status] ?? 0) + 1;
-  }
+  for (const job of jobs) counts[job.status] = (counts[job.status] ?? 0) + 1;
   return counts;
 }
 
-/**
- * Dashboard page (/) — main application view.
- * Pipeline sidebar + filter bar + job list + detail drawer.
- * Supabase realtime subscription keeps job counts live.
- */
+async function deleteJobIds(ids: string[]): Promise<void> {
+  // Delete in chunks of 100 to stay within Supabase URL length limits
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const { error } = await supabase.from('jobs').delete().in('id', chunk);
+    if (error) throw error;
+  }
+}
+
 export default function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -99,98 +90,168 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deletingUnmatched, setDeletingUnmatched] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(0);
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
 
-  const handleDeleteUnmatched = useCallback(async () => {
-    const unmatchedJobs = jobs.filter(j => j.status === 'new' || (j.match_score ?? 0) < 0.40);
-    if (unmatchedJobs.length === 0) {
-      alert('No unmatched jobs found to delete.');
-      return;
-    }
+  // ── Selection state ───────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
-    if (!confirm(`Are you sure you want to delete ${unmatchedJobs.length} unmatched job(s)?`)) {
-      return;
-    }
-
-    setDeletingUnmatched(true);
-    const unmatchedIds = unmatchedJobs.map(j => j.id);
-
-    // Optimistically remove from UI
-    setJobs(prev => prev.filter(j => !unmatchedIds.includes(j.id)));
-    if (selectedJob && unmatchedIds.includes(selectedJob.id)) {
-      setSelectedJob(null);
-    }
-
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .delete()
-        .in('id', unmatchedIds);
-      if (error) throw error;
-    } catch (err) {
-      console.error('[handleDeleteUnmatched] failed:', err);
-      alert('Failed to delete unmatched jobs. Refreshing...');
-      const { data } = await supabase.from('jobs').select('*').order('scraped_at', { ascending: false });
-      if (data) setJobs(data as Job[]);
-    } finally {
-      setDeletingUnmatched(false);
-    }
-  }, [jobs, selectedJob]);
+  const PAGE_SIZE = 200;
 
   // ── Initial load ──────────────────────────────────────────────
   useEffect(() => {
     void (async () => {
       setLoading(true);
-      const [jobsRes, sourcesRes, cvRes] = await Promise.all([
-        supabase.from('jobs').select('*').order('scraped_at', { ascending: false }),
+      const [jobsRes, sourcesRes, cvRes, settingsRes] = await Promise.all([
+        supabase.from('jobs').select('*').order('scraped_at', { ascending: false }).range(0, PAGE_SIZE - 1),
         supabase.from('sources').select('*').order('name'),
         supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false }),
+        supabase.from('settings').select('days_posted_default').eq('id', 1).single(),
       ]);
-      if (jobsRes.data) setJobs(jobsRes.data as Job[]);
+      if (jobsRes.data) {
+        setJobs(jobsRes.data as Job[]);
+        setHasMore(jobsRes.data.length === PAGE_SIZE);
+      }
       if (sourcesRes.data) {
         setSources(sourcesRes.data as Source[]);
-        // Last pipeline run = most recent last_scraped_at across all sources
-        const times = (sourcesRes.data as Source[])
-          .map(s => s.last_scraped_at)
-          .filter(Boolean) as string[];
+        const times = (sourcesRes.data as Source[]).map(s => s.last_scraped_at).filter(Boolean) as string[];
         if (times.length > 0) setLastRunAt(times.sort().reverse()[0] ?? null);
       }
       if (cvRes.data) setCvVersions(cvRes.data as CvVersion[]);
+      if (settingsRes.data) {
+        const days = (settingsRes.data as Pick<Settings, 'days_posted_default'>).days_posted_default;
+        setFilters(f => ({ ...f, maxDaysOld: days }));
+      }
       setLoading(false);
     })();
   }, []);
 
-  // ── Realtime subscription ─────────────────────────────────────
+  const handleLoadMore = useCallback(async () => {
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const from = nextPage * PAGE_SIZE;
+    const { data } = await supabase
+      .from('jobs').select('*')
+      .order('scraped_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+    if (data) {
+      setJobs(prev => [...prev, ...data as Job[]]);
+      setHasMore(data.length === PAGE_SIZE);
+      setPage(nextPage);
+    }
+    setLoadingMore(false);
+  }, [page]);
+
+  // ── Realtime ──────────────────────────────────────────────────
   useEffect(() => {
     const channel = supabase
       .channel('jobs-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, payload => {
         setJobs(prev => {
-          if (payload.eventType === 'INSERT') {
-            return [payload.new as Job, ...prev];
-          }
+          if (payload.eventType === 'INSERT') return [payload.new as Job, ...prev];
           if (payload.eventType === 'UPDATE') {
             const updated = payload.new as Job;
             return prev.map(j => j.id === updated.id ? updated : j);
           }
-          if (payload.eventType === 'DELETE') {
+          if (payload.eventType === 'DELETE')
             return prev.filter(j => j.id !== (payload.old as Job).id);
-          }
           return prev;
         });
       })
       .subscribe();
-
     return () => { void supabase.removeChannel(channel); };
   }, []);
 
-  // ── Actions ───────────────────────────────────────────────────
+  // ── Delete helpers ────────────────────────────────────────────
 
-  /**
-   * Selects the best CV for a job — uses shared selectCvForTitle so
-   * manual and auto-apply paths are always consistent.
-   */
+  function removeFromState(ids: string[]) {
+    const set = new Set(ids);
+    setJobs(prev => prev.filter(j => !set.has(j.id)));
+    if (selectedJob && set.has(selectedJob.id)) setSelectedJob(null);
+    setSelectedIds(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+  }
+
+  /** Delete a single job (called from drawer). */
+  const handleDeleteJob = useCallback(async (jobId: string) => {
+    if (!confirm('Delete this job? This cannot be undone.')) return;
+    removeFromState([jobId]);
+    try {
+      await deleteJobIds([jobId]);
+    } catch (err) {
+      console.error('[handleDeleteJob]', err);
+      alert('Failed to delete job.');
+      const { data } = await supabase.from('jobs').select('*').order('scraped_at', { ascending: false });
+      if (data) setJobs(data as Job[]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJob]);
+
+  /** Bulk delete selected jobs. */
+  const handleBulkDelete = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} selected job${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    removeFromState(ids);
+    try {
+      await deleteJobIds(ids);
+    } catch (err) {
+      console.error('[handleBulkDelete]', err);
+      alert('Some jobs failed to delete.');
+      const { data } = await supabase.from('jobs').select('*').order('scraped_at', { ascending: false });
+      if (data) setJobs(data as Job[]);
+    } finally {
+      setBulkDeleting(false);
+      setSelectMode(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds]);
+
+  /** Delete all closed/unmatched jobs (score < 40% or status=new). */
+  const handleDeleteUnmatched = useCallback(async () => {
+    const ids = jobs
+      .filter(j => j.status === 'new' || j.status === 'closed' || (j.match_score ?? 0) < 0.40)
+      .map(j => j.id);
+    if (ids.length === 0) { alert('No low-score or closed jobs to delete.'); return; }
+    if (!confirm(`Delete ${ids.length} low-score / closed job${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    removeFromState(ids);
+    try {
+      await deleteJobIds(ids);
+    } catch (err) {
+      console.error('[handleDeleteUnmatched]', err);
+      alert('Failed to delete jobs.');
+      const { data } = await supabase.from('jobs').select('*').order('scraped_at', { ascending: false });
+      if (data) setJobs(data as Job[]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs]);
+
+  // ── Selection helpers ─────────────────────────────────────────
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }
+
+  function toggleSelectAll(visibleIds: string[]) {
+    const allSelected = visibleIds.every(id => selectedIds.has(id));
+    setSelectedIds(allSelected ? new Set() : new Set(visibleIds));
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  // ── Job actions ───────────────────────────────────────────────
+
   function selectCv(jobTitle: string): CvVersion | null {
     return selectCvForTitle(cvVersions, jobTitle);
   }
@@ -201,28 +262,18 @@ export default function Dashboard() {
     const cv = job.cv_version_id
       ? (cvVersions.find(c => c.id === job.cv_version_id) ?? null)
       : selectCv(job.title);
-
-    // Manual apply → 'responded' (distinct from auto_applied)
-    const nextStatus: JobStatus = 'responded';
-
+    const nextStatus: JobStatus = 'manual_queue';
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: nextStatus } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: nextStatus } : prev);
-
     try {
-      await supabase.from('applications').insert({
-        job_id: jobId,
-        method: 'manual',
-        cv_version_id: cv?.id ?? null,
-      });
-      const { error } = await supabase.from('jobs')
-        .update({ status: nextStatus, cv_version_id: cv?.id ?? null })
-        .eq('id', jobId);
+      await supabase.from('applications').insert({ job_id: jobId, method: 'manual', cv_version_id: cv?.id ?? null });
+      const { error } = await supabase.from('jobs').update({ status: nextStatus, cv_version_id: cv?.id ?? null }).eq('id', jobId);
       if (error) throw error;
     } catch (err) {
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status } : j));
       setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status } : prev);
-      console.error('[handleMarkApplied] failed:', err);
-      alert('Failed to mark as applied. Please try again.');
+      console.error('[handleMarkApplied]', err);
+      alert('Failed to mark as applied.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, cvVersions]);
@@ -230,44 +281,32 @@ export default function Dashboard() {
   const handleDismiss = useCallback(async (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
-
-    // Optimistic update
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'closed' } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'closed' } : prev);
-
     try {
       const { error } = await supabase.from('jobs').update({ status: 'closed' }).eq('id', jobId);
       if (error) throw error;
     } catch (err) {
-      // Revert
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status } : j));
       setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status } : prev);
-      console.error('[handleDismiss] failed:', err);
-      alert('Failed to dismiss job. Please try again.');
+      console.error('[handleDismiss]', err);
+      alert('Failed to dismiss job.');
     }
   }, [jobs]);
 
   const handleRequeue = useCallback(async (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
-
-    // Optimistic update
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'matched', auto_apply_result: null } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'matched', auto_apply_result: null } : prev);
-
     try {
-      const { error } = await supabase.from('jobs').update({
-        status: 'matched',
-        auto_apply_result: null,
-        auto_apply_error: null,
-      }).eq('id', jobId);
+      const { error } = await supabase.from('jobs').update({ status: 'matched', auto_apply_result: null, auto_apply_error: null }).eq('id', jobId);
       if (error) throw error;
     } catch (err) {
-      // Revert
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status, auto_apply_result: job.auto_apply_result } : j));
       setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status, auto_apply_result: job.auto_apply_result } : prev);
-      console.error('[handleRequeue] failed:', err);
-      alert('Failed to re-queue job. Please try again.');
+      console.error('[handleRequeue]', err);
+      alert('Failed to re-queue job.');
     }
   }, [jobs]);
 
@@ -275,52 +314,46 @@ export default function Dashboard() {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
     const newCvId = cvVersionId || null;
-
-    // Optimistic update
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, cv_version_id: newCvId } : j));
     setSelectedJob(prev => prev?.id === jobId ? { ...prev, cv_version_id: newCvId } : prev);
-
     try {
       const { error } = await supabase.from('jobs').update({ cv_version_id: newCvId }).eq('id', jobId);
       if (error) throw error;
     } catch (err) {
-      // Revert
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, cv_version_id: job.cv_version_id } : j));
       setSelectedJob(prev => prev?.id === jobId ? { ...prev, cv_version_id: job.cv_version_id } : prev);
-      console.error('[handleSwapCv] failed:', err);
-      alert('Failed to update CV selection. Please try again.');
+      console.error('[handleSwapCv]', err);
+      alert('Failed to update CV selection.');
     }
   }, [jobs]);
 
-  // ── Derived data ──────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────
 
   const filteredJobs = applyFilters(jobs, filters, activeStatus);
   const counts = buildCounts(jobs);
   const sourceMap = Object.fromEntries(sources.map(s => [s.id, s.name]));
-
-  const activeStageTitle = activeStatus === null ? 'All Jobs' : (
-    activeStatus === 'new' ? 'New Jobs' :
-    activeStatus === 'matched' ? 'Matched Jobs' :
-    activeStatus === 'auto_applied' ? 'Auto-Applied Jobs' :
-    activeStatus === 'manual_queue' ? 'Manual Queue' :
-    activeStatus === 'responded' ? 'Responded Jobs' :
-    activeStatus === 'closed' ? 'Closed Jobs' : 'Jobs'
-  );
-
   const highMatchCount = jobs.filter(j => (j.match_score ?? 0) >= 0.75).length;
+
+  const activeStageTitle =
+    activeStatus === null         ? 'All Jobs'        :
+    activeStatus === 'new'        ? 'New'             :
+    activeStatus === 'matched'    ? 'Matched'         :
+    activeStatus === 'auto_applied' ? 'Auto-Applied'  :
+    activeStatus === 'manual_queue' ? 'Manual Queue'  :
+    activeStatus === 'responded'  ? 'Responded'       :
+    activeStatus === 'closed'     ? 'Closed'          : 'Jobs';
+
+  const visibleIds = filteredJobs.map(j => j.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
 
   return (
     <div className={styles.layout}>
-      <PipelineSidebar
-        activeStatus={activeStatus}
-        counts={counts}
-        onSelect={setActiveStatus}
-      />
+      <PipelineSidebar activeStatus={activeStatus} counts={counts} onSelect={setActiveStatus} />
 
       <div className={styles.main}>
         <FilterBar sources={sources} filters={filters} onChange={setFilters} />
 
-        {/* Summary Header Bar */}
+        {/* ── Summary bar ──────────────────────────────────────── */}
         <div className={styles.summaryBar}>
           <div className={styles.summaryTitleGroup}>
             <h1 className={styles.summaryTitle}>{activeStageTitle}</h1>
@@ -337,34 +370,73 @@ export default function Dashboard() {
                 <span className={styles.statVal}>{formatRelativeTime(lastRunAt)}</span>
               </div>
             )}
-            <div className={styles.statPill} title="Jobs with match score >= 75%">
+            <div className={styles.statPill}>
               <span className={styles.statDot} style={{ background: 'var(--success)' }} />
               <span className={styles.statLabel}>High match:</span>
               <span className={styles.statVal}>{highMatchCount}</span>
             </div>
-            <div className={styles.statPill} title="Jobs in manual review queue">
+            <div className={styles.statPill}>
               <span className={styles.statDot} style={{ background: 'var(--pending)' }} />
-              <span className={styles.statLabel}>Manual Queue:</span>
+              <span className={styles.statLabel}>Queue:</span>
               <span className={styles.statVal}>{counts.manual_queue ?? 0}</span>
             </div>
-            <div className={styles.statPill} title="Jobs auto-applied by connector">
-              <span className={styles.statDot} style={{ background: 'var(--success)' }} />
-              <span className={styles.statLabel}>Auto-applied:</span>
-              <span className={styles.statVal}>{counts.auto_applied ?? 0}</span>
-            </div>
+
+            {/* Select mode toggle */}
             <button
-              id="dashboard-clear-unmatched-btn"
+              className={`${styles.selectModeBtn} ${selectMode ? styles.selectModeBtnActive : ''}`}
+              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              title="Select jobs to bulk delete"
+            >
+              <CheckSquare size={12} />
+              {selectMode ? 'Cancel' : 'Select'}
+            </button>
+
+            {/* Delete low-score / closed */}
+            <button
               className={styles.deleteUnmatchedBtn}
               onClick={handleDeleteUnmatched}
-              disabled={deletingUnmatched}
-              title="Delete all jobs with status='new' or match_score < 40%"
+              title="Delete all jobs with score < 40% or status = closed/new"
             >
               <Trash2 size={12} />
-              {deletingUnmatched ? 'Deleting…' : 'Delete unmatched jobs'}
+              Clean up
             </button>
           </div>
         </div>
 
+        {/* ── Bulk action toolbar ───────────────────────────────── */}
+        {selectMode && (
+          <div className={styles.bulkBar}>
+            <button
+              className={styles.bulkSelectAll}
+              onClick={() => toggleSelectAll(visibleIds)}
+            >
+              {allVisibleSelected
+                ? <CheckSquare size={13} style={{ color: 'var(--accent)' }} />
+                : <Square size={13} />}
+              {allVisibleSelected ? 'Deselect all' : `Select all ${filteredJobs.length}`}
+            </button>
+
+            {selectedIds.size > 0 && (
+              <>
+                <span className={styles.bulkCount}>{selectedIds.size} selected</span>
+                <button
+                  className={styles.bulkDeleteBtn}
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                >
+                  <Trash2 size={12} />
+                  {bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+                </button>
+              </>
+            )}
+
+            <button className={styles.bulkCancelBtn} onClick={exitSelectMode}>
+              <X size={12} /> Cancel
+            </button>
+          </div>
+        )}
+
+        {/* ── Job list ─────────────────────────────────────────── */}
         <div className={styles.jobList}>
           {loading ? (
             <div className={styles.emptyState}>Loading jobs…</div>
@@ -375,15 +447,36 @@ export default function Dashboard() {
                 : 'No jobs match these filters. Try widening the days-old range or clearing a filter.'}
             </div>
           ) : (
-            filteredJobs.map(job => (
-              <JobCard
-                key={job.id}
-                job={job}
-                sourceName={job.source_id ? sourceMap[job.source_id] : undefined}
-                isSelected={selectedJob?.id === job.id}
-                onClick={setSelectedJob}
-              />
-            ))
+            <>
+              {filteredJobs.map(job => (
+                <div key={job.id} className={styles.cardRow}>
+                  {selectMode && (
+                    <button
+                      className={styles.checkboxBtn}
+                      onClick={() => toggleSelect(job.id)}
+                      aria-label={selectedIds.has(job.id) ? 'Deselect' : 'Select'}
+                    >
+                      {selectedIds.has(job.id)
+                        ? <CheckSquare size={15} style={{ color: 'var(--accent)' }} />
+                        : <Square size={15} style={{ color: 'var(--text-faint)' }} />}
+                    </button>
+                  )}
+                  <div className={styles.cardWrap} style={{ flex: 1 }}>
+                    <JobCard
+                      job={job}
+                      sourceName={job.source_id ? sourceMap[job.source_id] : undefined}
+                      isSelected={selectedJob?.id === job.id}
+                      onClick={selectMode ? () => toggleSelect(job.id) : setSelectedJob}
+                    />
+                  </div>
+                </div>
+              ))}
+              {hasMore && (
+                <button className={styles.loadMoreBtn} onClick={handleLoadMore} disabled={loadingMore}>
+                  {loadingMore ? 'Loading…' : 'Load more jobs'}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -397,6 +490,7 @@ export default function Dashboard() {
         onDismiss={handleDismiss}
         onRequeue={handleRequeue}
         onSwapCv={handleSwapCv}
+        onDelete={handleDeleteJob}
       />
     </div>
   );

@@ -1,14 +1,15 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Globe, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Globe, FileText, Settings, ClipboardList } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import styles from './AppShell.module.css';
 
 const NAV_LINKS: Array<{ to: string; label: string; icon: LucideIcon; end?: true }> = [
-  { to: '/',         label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/sources',  label: 'Sources',   icon: Globe },
-  { to: '/cv',       label: 'CV',        icon: FileText },
-  { to: '/settings', label: 'Settings',  icon: Settings },
+  { to: '/',             label: 'Dashboard',   icon: LayoutDashboard, end: true },
+  { to: '/sources',      label: 'Sources',     icon: Globe },
+  { to: '/applications', label: 'Applications', icon: ClipboardList },
+  { to: '/cv',           label: 'CV',          icon: FileText },
+  { to: '/settings',     label: 'Settings',    icon: Settings },
 ];
 
 /**

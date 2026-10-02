@@ -3,14 +3,14 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   cursor: pointer;
   user-select: none;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: border-color var(--duration-base) ease, background var(--duration-base) ease;
 }
 
 .card:hover {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
   background: var(--surface-raised);
 }
 
@@ -20,13 +20,11 @@
 }
 
 /* ── Track row ────────────────────────────────────────────────*/
-
 .trackRow {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 /* ── Body ─────────────────────────────────────────────────────*/
-
 .body {
   display: flex;
   flex-direction: column;
@@ -34,7 +32,6 @@
 }
 
 /* ── Title row ────────────────────────────────────────────────*/
-
 .titleRow {
   display: flex;
   align-items: flex-start;
@@ -50,7 +47,6 @@
 }
 
 .title {
-  font-family: var(--font-ui);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text);
@@ -62,7 +58,6 @@
 }
 
 .company {
-  font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 400;
   color: var(--text-muted);
@@ -70,17 +65,15 @@
 
 .tagSlot {
   flex-shrink: 0;
-  padding-top: 2px;
+  padding-top: 1px;
 }
 
-/* ── Tag group ──────────────────────────────────────────────── */
-
+/* ── Tag group ────────────────────────────────────────────────*/
 .tagGroup {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   flex-wrap: wrap;
-  margin-top: 2px;
 }
 
 .locationBadge {
@@ -88,7 +81,7 @@
   align-items: center;
   gap: 3px;
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -98,37 +91,54 @@
 
 .keywordTag {
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  background: var(--accent-dim);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
   border-radius: var(--radius-tag);
   padding: 1px 6px;
 }
 
-/* ── Meta row ─────────────────────────────────────────────────*/
+/* ── Score bar ────────────────────────────────────────────────*/
+.scoreBar {
+  height: 2px;
+  background: var(--border-subtle);
+  border-radius: 1px;
+  overflow: hidden;
+  margin-top: 2px;
+}
 
+.scoreBarFill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 400ms var(--ease-out);
+}
+
+/* ── Meta row ─────────────────────────────────────────────────*/
 .meta {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
-  margin-top: 2px;
 }
 
 .metaItem {
   font-family: var(--font-data);
   font-size: var(--text-xs);
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .scoreVal {
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.metaItem + .metaItem::before {
-  content: '·';
-  margin-right: var(--space-3);
-  color: var(--border);
+.metaDot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
 }
-

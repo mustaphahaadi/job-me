@@ -14,7 +14,7 @@ import type { AutoApplyConnector } from './base.js';
  *   - Submit button
  */
 export class LeverConnector implements AutoApplyConnector {
-  async apply(job: Job, cv: CvVersion | null): Promise<void> {
+  async apply(job: Job, cv: CvVersion | null, coverLetter?: string | null): Promise<void> {
     const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'];
     const LAST_NAME  = process.env['APPLICANT_LAST_NAME'];
     const EMAIL      = process.env['APPLICANT_EMAIL'];
@@ -52,7 +52,13 @@ export class LeverConnector implements AutoApplyConnector {
       await fileInput.setInputFiles(CV_PATH);
       await page.waitForTimeout(1500);
 
-      // ── Step 3: Submit ──────────────────────────────────────────
+      // ── Step 3: Cover letter (fill if field exists) ─────────────
+      if (coverLetter) {
+        const clField = await page.$('textarea[name="comments"], textarea[id*="cover" i], textarea[placeholder*="cover letter" i], textarea[placeholder*="additional" i]');
+        if (clField) await clField.fill(coverLetter);
+      }
+
+      // ── Step 4: Submit ──────────────────────────────────────────
       const submitBtn = await page.$('button[type="submit"], input[type="submit"]');
       if (!submitBtn) throw new Error('Submit button not found — form structure may have changed.');
       await submitBtn.click();

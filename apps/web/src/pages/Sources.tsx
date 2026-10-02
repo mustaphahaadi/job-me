@@ -257,6 +257,10 @@ export default function Sources() {
                   <option value="api">API (Generic)</option>
                   <option value="jobicy">Jobicy</option>
                   <option value="arbeitnow">Arbeitnow</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="indeed">Indeed</option>
+                  <option value="otta">Otta</option>
+                  <option value="glassdoor">Glassdoor (RSS)</option>
                 </select>
               </div>
               <div className={styles.field}>

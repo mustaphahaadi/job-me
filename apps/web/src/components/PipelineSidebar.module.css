@@ -1,5 +1,4 @@
-/* ── Sidebar (desktop) ────────────────────────────────────────── */
-
+/* ── Sidebar (desktop) ────────────────────────────────────────*/
 .sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
@@ -7,25 +6,29 @@
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  min-height: 100vh;
-  padding: var(--space-6) 0;
+  min-height: calc(100vh - var(--nav-height));
+  padding: var(--space-4) 0;
+  position: sticky;
+  top: var(--nav-height);
+  height: calc(100vh - var(--nav-height));
+  overflow-y: auto;
 }
 
-.logo {
+.sidebarLabel {
   font-family: var(--font-data);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: 500;
-  color: var(--text-muted);
-  padding: 0 var(--space-4) var(--space-6);
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
+  color: var(--text-faint);
+  padding: 0 var(--space-4) var(--space-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .stageList {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   padding: 0 var(--space-2);
 }
 
@@ -35,21 +38,21 @@
   margin: var(--space-2) var(--space-2);
 }
 
-/* ── Stage button ─────────────────────────────────────────────── */
-
+/* ── Stage button ─────────────────────────────────────────────*/
 .stageBtn {
   width: 100%;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2);
-  border-radius: var(--radius-card);
+  padding: 6px var(--space-2);
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   text-align: left;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--duration-base) ease, color var(--duration-base) ease;
+  position: relative;
 }
 
 .stageBtn:hover {
@@ -62,15 +65,25 @@
   color: var(--text);
 }
 
+.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
 .stageDot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .stageName {
-  font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 500;
   flex: 1;
@@ -79,30 +92,30 @@
 .stageCount {
   font-family: var(--font-data);
   font-size: var(--text-xs);
-  color: var(--text-muted);
-  min-width: 20px;
+  color: var(--text-faint);
+  min-width: 18px;
   text-align: right;
 }
 
 .countPending {
   color: var(--pending);
+  font-weight: 600;
 }
 
-/* ── Responsive: horizontal tabs below 900px ──────────────────── */
-
+/* ── Mobile: horizontal tabs ──────────────────────────────────*/
 @media (max-width: 900px) {
   .sidebar {
     width: 100%;
     min-height: auto;
+    height: auto;
+    position: static;
     border-right: none;
     border-bottom: 1px solid var(--border);
     padding: var(--space-2) 0;
     flex-direction: column;
   }
 
-  .logo {
-    display: none;
-  }
+  .sidebarLabel { display: none; }
 
   .stageList {
     flex-direction: row;
@@ -113,22 +126,20 @@
   }
 
   .stageList::-webkit-scrollbar { display: none; }
-
-  .divider {
-    display: none;
-  }
+  .divider { display: none; }
 
   .stageBtn {
     white-space: nowrap;
-    padding: var(--space-1) var(--space-3);
+    padding: 4px var(--space-3);
     border: 1px solid var(--border);
+    border-radius: var(--radius-tag);
   }
 
   .active {
     border-color: var(--accent);
   }
 
-  .stageName {
-    font-size: var(--text-xs);
-  }
+  .active::before { display: none; }
+
+  .stageName { font-size: var(--text-xs); }
 }

@@ -4,6 +4,10 @@ import { RssConnector } from '../connectors/rss.js';
 import { ApiConnector } from '../connectors/api.js';
 import { ArbeitnowConnector } from '../connectors/arbeitnow.js';
 import { JobicyConnector } from '../connectors/jobicy.js';
+import { LinkedInConnector } from '../connectors/linkedin.js';
+import { IndeedConnector } from '../connectors/indeed.js';
+import { OttaConnector } from '../connectors/otta.js';
+import { GlassdoorConnector } from '../connectors/glassdoor.js';
 import { sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
@@ -126,19 +130,24 @@ async function upsertJobs(
       description: job.description,
       posted_date: job.posted_date,
     }));
-    // Supabase JS doesn't support batch updates natively; use Promise.all with small batches
-    // to avoid hitting query limits. Still far fewer calls than N+1.
     const BATCH = 20;
+    let updateErrors = 0;
     for (let i = 0; i < updates.length; i += BATCH) {
       const slice = updates.slice(i, i + BATCH);
-      await Promise.all(slice.map(u =>
+      const results = await Promise.all(slice.map(u =>
         supabase.from('jobs').update({
           description: u.description,
           posted_date: u.posted_date,
         }).eq('id', u.id)
       ));
+      for (const r of results) {
+        if (r.error) {
+          updateErrors++;
+          console.error(`[scrape] Batch update error: ${r.error.message}`);
+        }
+      }
     }
-    console.log(`[scrape] Updated ${toUpdate.length} existing job(s).`);
+    console.log(`[scrape] Updated ${toUpdate.length - updateErrors} existing job(s)${updateErrors > 0 ? ` (${updateErrors} failed)` : ''}.`);
   }
 }
 
@@ -147,6 +156,10 @@ function getConnector(source: Source): Connector {
   if (source.type === 'api') return new ApiConnector();
   if (source.type === 'arbeitnow') return new ArbeitnowConnector();
   if (source.type === 'jobicy') return new JobicyConnector();
+  if (source.type === 'linkedin') return new LinkedInConnector();
+  if (source.type === 'indeed') return new IndeedConnector();
+  if (source.type === 'otta') return new OttaConnector();
+  if (source.type === 'glassdoor') return new GlassdoorConnector();
   throw new Error(`Unknown source type: ${source.type}`);
 }
 

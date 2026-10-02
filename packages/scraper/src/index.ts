@@ -1,11 +1,12 @@
 import { createSupabaseClient } from '@job-me/shared';
 import { runScrape } from './pipeline/scrape.js';
+import { runEnrich } from './pipeline/enrich.js';
 import { runMatch } from './pipeline/match.js';
 import { runAutoApply } from './pipeline/auto-apply.js';
 
 /**
  * Main pipeline entry point.
- * Runs: scrape → match → auto-apply in sequence.
+ * Runs: scrape → enrich (AI) → match → auto-apply in sequence.
  * Exits non-zero on unhandled errors (visible in GitHub Actions tab).
  */
 async function main(): Promise<void> {
@@ -22,6 +23,7 @@ async function main(): Promise<void> {
   const start = Date.now();
 
   await runScrape(supabase);
+  await runEnrich(supabase);   // AI: spam filter + remote detection (skipped if no GEMINI_API_KEY)
   await runMatch(supabase);
   await runAutoApply(supabase);
 

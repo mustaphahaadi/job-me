@@ -34,18 +34,26 @@ jobs:
         working-directory: packages/scraper
 
       - name: Download active CV from Supabase Storage
-        # Fetches the CV file that was uploaded via the /cv page.
-        # The pipeline reads CV_FILE_PATH to find the PDF.
-        # Requires the Supabase Storage bucket to be named 'cv-files' and the file named 'resume.pdf'.
-        # Adjust the storage path if your bucket/filename differs.
+        # Queries cv_versions for the most recently uploaded file_path, then
+        # downloads that exact file. No longer hardcoded to 'resume.pdf'.
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          CV_FILE_PATH_DB=$(curl -fsSL \
+            "${SUPABASE_URL}/rest/v1/cv_versions?select=file_path&order=uploaded_at.desc&limit=1" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Accept: application/json" \
+            | python3 -c "import sys,json; rows=json.load(sys.stdin); print(rows[0]['file_path'] if rows else 'resume.pdf')")
+
+          echo "Resolved CV path from DB: ${CV_FILE_PATH_DB}"
+
           curl -fsSL \
-            "${SUPABASE_URL}/storage/v1/object/cv-files/resume.pdf" \
+            "${SUPABASE_URL}/storage/v1/object/cv-files/${CV_FILE_PATH_DB}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -o /tmp/resume.pdf
+
           echo "CV_FILE_PATH=/tmp/resume.pdf" >> "$GITHUB_ENV"
 
       - name: Run pipeline (scrape → match → auto-apply)
@@ -59,4 +67,6 @@ jobs:
           APPLICANT_LAST_NAME: ${{ secrets.APPLICANT_LAST_NAME }}
           APPLICANT_EMAIL: ${{ secrets.APPLICANT_EMAIL }}
           APPLICANT_PHONE: ${{ secrets.APPLICANT_PHONE }}
+          # Optional: enables AI cover letter generation and spam filtering
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 

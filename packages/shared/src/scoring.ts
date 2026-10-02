@@ -1,61 +1,83 @@
 import type { MatchBreakdown, NormalizedJob, Settings } from './types.js';
-
-// ─── Skill vocabulary ─────────────────────────────────────────────────────────
-// The user's actual stack from their CV / certifications.
-// Configurable: extend this list to match your skills.
-
-const SKILL_VOCABULARY = [
-  'aws', 'ec2', 's3', 'lambda', 'rds', 'vpc', 'iam', 'cloudformation',
-  'cloudwatch', 'eks', 'ecs', 'fargate', 'route53', 'cloudfront',
-  'docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'helm',
-  'ci/cd', 'github actions', 'jenkins', 'gitlab ci', 'circleci',
-  'python', 'bash', 'linux', 'devops', 'sre', 'cloud',
-  'monitoring', 'observability', 'prometheus', 'grafana', 'elk',
-  'networking', 'load balancer', 'nginx', 'apache',
-];
+import { DEFAULT_SKILL_VOCABULARY } from './types.js';
 
 // ─── Seniority tokens ─────────────────────────────────────────────────────────
 
 const SENIOR_TOKENS = ['senior', 'sr.', 'sr ', 'lead', 'principal', 'staff', '5+ years', '7+ years', '10+ years'];
 const JUNIOR_TOKENS = ['junior', 'jr.', 'jr ', 'entry', 'intern', 'graduate', '0-2 years', '1+ year'];
-const MID_TOKENS = ['mid', 'mid-level', 'intermediate', '2+ years', '3+ years', '3-5 years'];
+const MID_TOKENS    = ['mid', 'mid-level', 'intermediate', '2+ years', '3+ years', '3-5 years'];
 
 type TargetSeniority = 'junior' | 'mid' | 'senior' | 'any';
 
 // ─── Weights ──────────────────────────────────────────────────────────────────
 
 const WEIGHTS = {
-  title_match: 0.40,
+  title_match:    0.40,
   skills_overlap: 0.30,
-  seniority: 0.15,
-  location: 0.10,
-  recency: 0.05,
+  seniority:      0.15,
+  location:       0.10,
+  recency:        0.05,
 } as const;
 
-const WEIGHTS_VERSION = '1.0';
+const WEIGHTS_VERSION = '1.1';
 
-// ─── Scoring helpers ──────────────────────────────────────────────────────────
-
-function tokenize(text: string): string[] {
-  return text.toLowerCase().split(/\W+/).filter(Boolean);
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function textContainsAny(text: string, tokens: string[]): string[] {
   const lower = text.toLowerCase();
-  return tokens.filter(t => lower.includes(t));
+  return tokens.filter(t => lower.includes(t.toLowerCase()));
+}
+
+/**
+ * Fuzzy title score — word-level overlap between job title and target role phrases.
+ *
+ * Strategy:
+ *   1. For each target role, split into words and count how many appear in the job title.
+ *   2. Best overlap ratio across all roles becomes the raw score.
+ *   3. A full exact match → 1.0. One matching word out of two → 0.5. Zero → 0.0.
+ *
+ * This means "Senior Cloud Infrastructure Engineer" still scores well against
+ * "Cloud Engineer" (2/2 words match → 1.0) and "DevOps" (1/1 → 1.0).
+ */
+function titleMatchScore(jobTitle: string, targetRoles: string[]): { score: number; matched: string[] } {
+  const titleLower = jobTitle.toLowerCase();
+  let bestScore = 0;
+  const allMatched: string[] = [];
+
+  for (const role of targetRoles) {
+    const roleWords = role.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    if (roleWords.length === 0) continue;
+    const matchedWords = roleWords.filter(w => titleLower.includes(w));
+    const ratio = matchedWords.length / roleWords.length;
+    if (ratio > bestScore) bestScore = ratio;
+    if (matchedWords.length > 0) allMatched.push(...matchedWords);
+  }
+
+  // Also check single-word aliases that are strong signals regardless of target_roles
+  const STRONG_ALIASES = [
+    'devops', 'sre', 'platform engineer', 'cloud engineer', 'cloud architect',
+    'infrastructure engineer', 'site reliability', 'aws engineer', 'aws architect',
+    'solutions architect', 'systems engineer', 'trainer', 'instructor',
+  ];
+  for (const alias of STRONG_ALIASES) {
+    if (titleLower.includes(alias)) {
+      bestScore = Math.max(bestScore, 0.8);
+      allMatched.push(alias);
+    }
+  }
+
+  return { score: Math.min(bestScore, 1.0), matched: [...new Set(allMatched)] };
 }
 
 function recencyScore(postedDate: string | null): number {
-  if (!postedDate) return 0.5; // unknown date — neutral
-  const ageMs = Date.now() - new Date(postedDate).getTime();
-  const ageDays = ageMs / (1000 * 60 * 60 * 24);
-  // Exponential decay: score = e^(-ageDays/14), so a 14-day-old post scores ~0.37
+  if (!postedDate) return 0.5;
+  const ageDays = (Date.now() - new Date(postedDate).getTime()) / 86_400_000;
   return Math.exp(-ageDays / 14);
 }
 
 function daysOld(postedDate: string | null): number {
   if (!postedDate) return -1;
-  return Math.floor((Date.now() - new Date(postedDate).getTime()) / (1000 * 60 * 60 * 24));
+  return Math.floor((Date.now() - new Date(postedDate).getTime()) / 86_400_000);
 }
 
 // ─── Main scoring function ────────────────────────────────────────────────────
@@ -63,7 +85,7 @@ function daysOld(postedDate: string | null): number {
 export interface ScoringOptions {
   targetRoles: string[];
   negativeKeywords?: string[];
-  acceptedLocations?: string[]; // e.g. ['remote', 'uk', 'united kingdom']
+  acceptedLocations?: string[];
   targetSeniority?: TargetSeniority;
   skillVocabulary?: string[];
 }
@@ -79,24 +101,24 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     negativeKeywords = [],
     acceptedLocations = ['remote'],
     targetSeniority = 'mid',
-    skillVocabulary = SKILL_VOCABULARY,
+    skillVocabulary = DEFAULT_SKILL_VOCABULARY,
   } = options;
 
-  const titleLower = job.title.toLowerCase();
-  const descLower = (job.description ?? '').toLowerCase();
+  const titleLower    = job.title.toLowerCase();
+  const descLower     = (job.description ?? '').toLowerCase();
   const locationLower = (job.raw_location ?? '').toLowerCase();
 
-  // ── Negative keyword check (hard stop) ─────────────────────────────────────
+  // ── Negative keyword check (hard stop) ────────────────────────────────────
   const negativeFound = textContainsAny(titleLower + ' ' + descLower, negativeKeywords);
   if (negativeFound.length > 0) {
     return {
       score: 0,
       breakdown: {
-        title_match: { score: 0, weight: WEIGHTS.title_match, matched_keywords: [] },
+        title_match:    { score: 0, weight: WEIGHTS.title_match,    matched_keywords: [] },
         skills_overlap: { score: 0, weight: WEIGHTS.skills_overlap, matched_skills: [] },
-        seniority: { score: 0, weight: WEIGHTS.seniority, detected_level: null },
-        location: { score: 0, weight: WEIGHTS.location, accepted: false },
-        recency: { score: 0, weight: WEIGHTS.recency, days_old: daysOld(job.posted_date) },
+        seniority:      { score: 0, weight: WEIGHTS.seniority,      detected_level: null },
+        location:       { score: 0, weight: WEIGHTS.location,       accepted: false },
+        recency:        { score: 0, weight: WEIGHTS.recency,        days_old: daysOld(job.posted_date) },
         negative_keyword_hit: true,
         negative_keywords_found: negativeFound,
         weights_version: WEIGHTS_VERSION,
@@ -104,89 +126,74 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     };
   }
 
-  // ── Title match ─────────────────────────────────────────────────────────────
-  // Domain role tokens strictly covering Cloud, DevOps, AWS, Platform, SRE, Infrastructure, Trainer & Instructor roles
-  const DOMAIN_TITLE_TOKENS = [
-    'cloud', 'devops', 'dev ops', 'secops', 'devsecops', 'gitops',
-    'aws', 'azure', 'gcp', 'platform', 'sre', 'site reliability', 'reliability',
-    'infrastructure', 'infra', 'sysadmin', 'systems engineer', 'systems administrator',
-    'trainer', 'instructor', 'educator', 'technical trainer', 'technical instructor',
-  ];
+  // ── Title match (fuzzy word-level) ────────────────────────────────────────
+  const { score: titleScore, matched: matchedTitleKeywords } = titleMatchScore(job.title, targetRoles);
 
-  const matchedTitleKeywords = textContainsAny(
-    titleLower,
-    [...targetRoles.map(r => r.toLowerCase()), ...DOMAIN_TITLE_TOKENS]
-  );
-  const titleScore = matchedTitleKeywords.length > 0 ? 1.0 : 0.0;
+  // ── Skills overlap ────────────────────────────────────────────────────────
+  // Search both title and description for skill keywords
+  const matchedSkills = textContainsAny(titleLower + ' ' + descLower, skillVocabulary);
+  // 3+ matching skills = full score (was 5 — too strict for short descriptions)
+  const skillsScore = Math.min(matchedSkills.length / 3, 1.0);
 
-  // ── Skills overlap ──────────────────────────────────────────────────────────
-  const matchedSkills = textContainsAny(descLower, skillVocabulary);
-  // Normalize: 5+ matching skills = full score, linear below that
-  const skillsScore = Math.min(matchedSkills.length / 5, 1.0);
-
-  // ── Seniority filter ────────────────────────────────────────────────────────
+  // ── Seniority ─────────────────────────────────────────────────────────────
   const seniorHits = textContainsAny(titleLower + ' ' + descLower, SENIOR_TOKENS);
   const juniorHits = textContainsAny(titleLower + ' ' + descLower, JUNIOR_TOKENS);
-  const midHits = textContainsAny(titleLower + ' ' + descLower, MID_TOKENS);
+  const midHits    = textContainsAny(titleLower + ' ' + descLower, MID_TOKENS);
 
   let detectedLevel: string | null = null;
-  if (seniorHits.length > 0) detectedLevel = 'senior';
+  if (seniorHits.length > 0)      detectedLevel = 'senior';
   else if (juniorHits.length > 0) detectedLevel = 'junior';
-  else if (midHits.length > 0) detectedLevel = 'mid';
+  else if (midHits.length > 0)    detectedLevel = 'mid';
 
-  let seniorityScore = 0.5; // neutral if level undetected
+  let seniorityScore = 0.6; // neutral if level undetected (slightly positive — unspecified roles are often open)
   if (detectedLevel) {
     if (targetSeniority === 'any') {
       seniorityScore = 1.0;
     } else if (detectedLevel === targetSeniority) {
       seniorityScore = 1.0;
     } else if (
-      (targetSeniority === 'mid' && detectedLevel === 'senior') ||
+      (targetSeniority === 'mid'    && detectedLevel === 'senior') ||
       (targetSeniority === 'senior' && detectedLevel === 'mid')
     ) {
-      seniorityScore = 0.5; // adjacent level — partial credit
+      seniorityScore = 0.5; // adjacent — partial credit
     } else {
-      seniorityScore = 0.1; // wrong level — penalise heavily
+      seniorityScore = 0.1; // wrong level
     }
   }
 
-  // ── Location/remote filter ───────────────────────────────────────────────────
+  // ── Location ──────────────────────────────────────────────────────────────
+  const ALWAYS_ACCEPTED = ['remote', 'worldwide', 'anywhere', 'global', 'africa', 'ghana', 'emea'];
   const locationAccepted =
     acceptedLocations.length === 0 ||
     acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase())) ||
-    locationLower.includes('remote') ||
-    locationLower.includes('worldwide') ||
-    locationLower.includes('anywhere') ||
-    locationLower.includes('global') ||
-    locationLower.includes('africa') ||
-    locationLower.includes('ghana') ||
-    locationLower.includes('emea') ||
+    ALWAYS_ACCEPTED.some(t => locationLower.includes(t)) ||
     locationLower === '';
   const locationScore = locationAccepted ? 1.0 : 0.0;
 
-  // ── Recency decay ────────────────────────────────────────────────────────────
+  // ── Recency ───────────────────────────────────────────────────────────────
   const recency = recencyScore(job.posted_date);
-  const days = daysOld(job.posted_date);
+  const days    = daysOld(job.posted_date);
 
   // ── Blended score ─────────────────────────────────────────────────────────
   let blended =
-    titleScore * WEIGHTS.title_match +
-    skillsScore * WEIGHTS.skills_overlap +
-    seniorityScore * WEIGHTS.seniority +
-    locationScore * WEIGHTS.location +
-    recency * WEIGHTS.recency;
+    titleScore    * WEIGHTS.title_match    +
+    skillsScore   * WEIGHTS.skills_overlap +
+    seniorityScore * WEIGHTS.seniority     +
+    locationScore  * WEIGHTS.location      +
+    recency        * WEIGHTS.recency;
 
-  // Strict domain filter: if title has no Cloud/DevOps/Trainer/Platform/SRE/AWS keywords, force score to 0
-  if (titleScore === 0.0) {
-    blended = 0.0;
+  // Only hard-zero if BOTH title AND skills are completely empty — avoids
+  // discarding jobs where the title is phrased differently but skills match well.
+  if (titleScore === 0 && skillsScore === 0) {
+    blended = 0;
   }
 
   const breakdown: MatchBreakdown = {
-    title_match: { score: titleScore, weight: WEIGHTS.title_match, matched_keywords: matchedTitleKeywords },
-    skills_overlap: { score: skillsScore, weight: WEIGHTS.skills_overlap, matched_skills: matchedSkills },
-    seniority: { score: seniorityScore, weight: WEIGHTS.seniority, detected_level: detectedLevel },
-    location: { score: locationScore, weight: WEIGHTS.location, accepted: locationAccepted },
-    recency: { score: recency, weight: WEIGHTS.recency, days_old: days },
+    title_match:    { score: titleScore,    weight: WEIGHTS.title_match,    matched_keywords: matchedTitleKeywords },
+    skills_overlap: { score: skillsScore,   weight: WEIGHTS.skills_overlap, matched_skills: matchedSkills },
+    seniority:      { score: seniorityScore, weight: WEIGHTS.seniority,     detected_level: detectedLevel },
+    location:       { score: locationScore,  weight: WEIGHTS.location,      accepted: locationAccepted },
+    recency:        { score: recency,        weight: WEIGHTS.recency,        days_old: days },
     negative_keyword_hit: false,
     negative_keywords_found: [],
     weights_version: WEIGHTS_VERSION,
@@ -195,17 +202,13 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   return { score: Math.round(blended * 1000) / 1000, breakdown };
 }
 
-/**
- * Derives ScoringOptions from a Settings row.
- * Maps all known settings fields so callers don't need to pass extra options manually.
- * extra overrides take precedence if provided.
- */
 export function optionsFromSettings(settings: Settings, extra?: Partial<ScoringOptions>): ScoringOptions {
   return {
-    targetRoles: settings.target_roles,
-    negativeKeywords: settings.negative_keywords ?? [],
+    targetRoles:       settings.target_roles,
+    negativeKeywords:  settings.negative_keywords ?? [],
     acceptedLocations: settings.accepted_locations ?? ['remote'],
-    targetSeniority: settings.target_seniority ?? 'mid',
+    targetSeniority:   settings.target_seniority ?? 'mid',
+    skillVocabulary:   settings.skill_vocabulary ?? DEFAULT_SKILL_VOCABULARY,
     ...extra,
   };
 }

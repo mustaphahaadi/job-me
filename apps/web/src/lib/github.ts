@@ -14,6 +14,7 @@ export async function triggerScrapeNow(): Promise<void> {
   }
 
   const [owner, repoName] = repo.split('/');
+  const branch = import.meta.env['VITE_GITHUB_BRANCH'] as string | undefined ?? 'main';
   const url = `https://api.github.com/repos/${owner}/${repoName}/actions/workflows/scrape.yml/dispatches`;
 
   const res = await fetch(url, {
@@ -24,7 +25,7 @@ export async function triggerScrapeNow(): Promise<void> {
       'Content-Type': 'application/json',
       'X-GitHub-Api-Version': '2022-11-28',
     },
-    body: JSON.stringify({ ref: 'main' }),
+    body: JSON.stringify({ ref: branch }),
   });
 
   if (!res.ok && res.status !== 204) {

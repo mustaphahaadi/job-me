@@ -22,7 +22,7 @@ export const JOB_STATUSES: JobStatus[] = [
 export interface Source {
   id: string;
   name: string;
-  type: 'api' | 'rss' | 'arbeitnow' | 'jobicy';
+  type: 'api' | 'rss' | 'arbeitnow' | 'jobicy' | 'linkedin' | 'indeed' | 'glassdoor' | 'otta';
   base_url: string;
   query_params: Record<string, unknown>;
   active: boolean;
@@ -71,6 +71,7 @@ export interface Job {
   auto_apply_result: 'success' | 'failed' | null;
   auto_apply_error: string | null;
   cv_version_id: string | null;
+  cover_letter_text: string | null;
   created_at: string;
 }
 
@@ -87,19 +88,33 @@ export interface Settings {
   target_roles: string[];
   days_posted_default: number;
   auto_apply_score_threshold: number;
+  max_auto_apply_per_run: number;
   target_seniority?: 'junior' | 'mid' | 'senior' | 'any';
   accepted_locations?: string[];
   negative_keywords?: string[];
+  skill_vocabulary?: string[];
 }
+
+export const DEFAULT_SKILL_VOCABULARY = [
+  'aws', 'ec2', 's3', 'lambda', 'rds', 'vpc', 'iam', 'cloudformation',
+  'cloudwatch', 'eks', 'ecs', 'fargate', 'route53', 'cloudfront',
+  'docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'helm',
+  'ci/cd', 'github actions', 'jenkins', 'gitlab ci', 'circleci',
+  'python', 'bash', 'linux', 'devops', 'sre', 'cloud',
+  'monitoring', 'observability', 'prometheus', 'grafana', 'elk',
+  'networking', 'load balancer', 'nginx', 'apache',
+];
 
 export const DEFAULT_SETTINGS: Settings = {
   id: 1,
   target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor', 'Platform Engineer', 'Site Reliability Engineer'],
   days_posted_default: 14,
   auto_apply_score_threshold: 0.75,
+  max_auto_apply_per_run: 5,
   target_seniority: 'mid',
   accepted_locations: ['remote', 'worldwide', 'anywhere', 'global', 'africa', 'ghana'],
   negative_keywords: [],
+  skill_vocabulary: DEFAULT_SKILL_VOCABULARY,
 };
 
 // ─── Scraper types ────────────────────────────────────────────────────────────

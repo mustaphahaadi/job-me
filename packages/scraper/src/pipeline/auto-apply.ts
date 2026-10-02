@@ -1,15 +1,17 @@
 import type { SupabaseClient, Job, CvVersion } from '@job-me/shared';
-import { getOrInitSettings, selectCvForTitle } from '@job-me/shared';
+import { getOrInitSettings, selectCvForTitle, generateCoverLetter } from '@job-me/shared';
 import { sanitizeLog } from '../connectors/utils.js';
 import type { AutoApplyConnector } from '../auto-apply-connectors/base.js';
 import { GreenhouseConnector } from '../auto-apply-connectors/greenhouse.js';
 import { LeverConnector } from '../auto-apply-connectors/lever.js';
+import { WorkdayConnector } from '../auto-apply-connectors/workday.js';
 
 // ─── Connector registry ───────────────────────────────────────────────────────
 // Add new ATS connectors here. Key = pattern to detect in the job URL.
 const AUTO_APPLY_CONNECTORS: Array<{ pattern: RegExp; connector: AutoApplyConnector }> = [
   { pattern: /greenhouse\.io|boards\.greenhouse\.io/, connector: new GreenhouseConnector() },
   { pattern: /jobs\.lever\.co|lever\.co\//, connector: new LeverConnector() },
+  { pattern: /myworkdayjobs\.com|wd3\.myworkday\.com|wd1\.myworkday\.com/, connector: new WorkdayConnector() },
 ];
 
 function findConnector(jobUrl: string): AutoApplyConnector | null {
@@ -45,8 +47,8 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
 
   console.log(`[auto-apply] ${jobs.length} eligible job(s).`);
 
-  // Rate cap: max 5 per run (configurable per-source in future)
-  const MAX_PER_RUN = 5;
+  // Rate cap: read from settings, default 5
+  const MAX_PER_RUN = settings.max_auto_apply_per_run ?? 5;
   let attempted = 0;
 
   for (const job of jobs as Job[]) {
@@ -66,8 +68,24 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
     const cv = selectCvForTitle(cvs, job.title);
     const now = new Date().toISOString();
 
+    // Generate cover letter via Gemini before attempting form submission
+    const coverLetter = await generateCoverLetter({
+      jobTitle: job.title,
+      company: job.company,
+      jobDescription: job.description,
+      applicantName: `${process.env['APPLICANT_FIRST_NAME'] ?? ''} ${process.env['APPLICANT_LAST_NAME'] ?? ''}`.trim(),
+      applicantEmail: process.env['APPLICANT_EMAIL'] ?? '',
+      targetRoles: settings.target_roles,
+      skillVocabulary: settings.skill_vocabulary ?? [],
+    });
+
+    // Store cover letter on the job regardless of apply outcome
+    if (coverLetter) {
+      await supabase.from('jobs').update({ cover_letter_text: coverLetter }).eq('id', job.id);
+    }
+
     try {
-      await connector.apply(job, cv);
+      await connector.apply(job, cv, coverLetter);
 
       // Success
       await supabase.from('jobs').update({

@@ -26,31 +26,41 @@ function ageBadge(dateStr: string | null): { label: string; color: string } | nu
   return { label: `${days}d ago`, color: 'var(--danger)' };
 }
 
-function formatScore(score: number | null): string {
-  if (score === null) return '—';
-  return (score * 100).toFixed(0) + '%';
-}
-
 function getScoreColor(score: number | null): string {
-  if (score === null) return 'var(--text-muted)';
+  if (score === null) return 'var(--text-faint)';
   if (score >= 0.75) return 'var(--success)';
   if (score >= 0.5) return 'var(--accent)';
   return 'var(--pending)';
 }
 
-/**
- * Job card — §4 layout:
- *   pipeline track (top)
- *   title + company
- *   location + matched keywords tags
- *   source + posted date + match score (data font, muted)
- *   status tag (top-right)
- *
- * Hover: border shifts to --accent, bg to --surface-raised. No scale/transform.
- */
 export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
-  const scoreColor = getScoreColor(job.match_score);
   const keywords = job.matched_keywords ? job.matched_keywords.slice(0, 4) : [];
+  const scoreColor = getScoreColor(job.match_score);
+  const scorePct = job.match_score !== null ? Math.round(job.match_score * 100) : null;
+
+  const metaItems: Array<{ key: string; node: React.ReactNode }> = [];
+  if (sourceName) metaItems.push({ key: 'source', node: sourceName });
+  const badge = ageBadge(job.posted_date);
+  if (badge) metaItems.push({
+    key: 'age',
+    node: (
+      <>
+        <Clock size={9} style={{ color: badge.color }} />
+        <span style={{ color: badge.color }}>{badge.label}</span>
+      </>
+    ),
+  });
+  if (scorePct !== null) metaItems.push({
+    key: 'score',
+    node: (
+      <>
+        Match&nbsp;
+        <span className={styles.scoreVal} style={{ color: scoreColor }}>
+          {scorePct}%
+        </span>
+      </>
+    ),
+  });
 
   return (
     <article
@@ -71,56 +81,45 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
         <div className={styles.titleRow}>
           <div className={styles.titleGroup}>
             <h2 className={styles.title}>{job.title}</h2>
-            {job.company && (
-              <span className={styles.company}>{job.company}</span>
-            )}
+            {job.company && <span className={styles.company}>{job.company}</span>}
           </div>
           <div className={styles.tagSlot}>
             <StatusTag status={job.status} />
           </div>
         </div>
 
-        {/* Location & Matched Keywords Tags */}
         {(job.raw_location || keywords.length > 0) && (
           <div className={styles.tagGroup}>
             {job.raw_location && (
-              <span className={styles.locationBadge} title={`Location: ${job.raw_location}`}>
-                <MapPin size={10} />
+              <span className={styles.locationBadge}>
+                <MapPin size={9} />
                 <span>{job.raw_location}</span>
               </span>
             )}
             {keywords.map(kw => (
-              <span key={kw} className={styles.keywordTag}>
-                {kw}
-              </span>
+              <span key={kw} className={styles.keywordTag}>{kw}</span>
             ))}
           </div>
         )}
 
+        {scorePct !== null && (
+          <div className={styles.scoreBar}>
+            <div
+              className={styles.scoreBarFill}
+              style={{ width: `${scorePct}%`, background: scoreColor }}
+            />
+          </div>
+        )}
+
         <div className={styles.meta}>
-          {sourceName && (
-            <span className={styles.metaItem}>{sourceName}</span>
-          )}
-          {(() => {
-            const badge = ageBadge(job.posted_date);
-            return badge ? (
-              <span className={styles.metaItem}>
-                <Clock size={9} style={{ color: badge.color, marginRight: 2 }} />
-                <span style={{ color: badge.color }}>{badge.label}</span>
-              </span>
-            ) : null;
-          })()}
-          {job.match_score !== null && (
-            <span className={styles.metaItem}>
-              Match&nbsp;
-              <span className={styles.scoreVal} style={{ color: getScoreColor(job.match_score) }}>
-                {formatScore(job.match_score)}
-              </span>
-            </span>
-          )}
+          {metaItems.map((item, i) => (
+            <>
+              {i > 0 && <span key={`dot-${item.key}`} className={styles.metaDot} />}
+              <span key={item.key} className={styles.metaItem}>{item.node}</span>
+            </>
+          ))}
         </div>
       </div>
     </article>
   );
 }
-

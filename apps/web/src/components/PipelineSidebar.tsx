@@ -8,18 +8,14 @@ interface Props {
   onSelect: (status: JobStatus | null) => void;
 }
 
-/**
- * Left rail — vertical pipeline stage stepper with live counts.
- * Click a stage to filter the job list. "All" option clears filter.
- * Below 900px: collapses to horizontal tabs via CSS media query.
- */
 export function PipelineSidebar({ activeStatus, counts, onSelect }: Props) {
+  const total = Object.values(counts).reduce((a, b) => (a ?? 0) + (b ?? 0), 0);
+
   return (
     <nav className={styles.sidebar} aria-label="Pipeline filter">
-      <div className={styles.logo}>job-me</div>
+      <div className={styles.sidebarLabel}>Pipeline</div>
 
       <ul className={styles.stageList} role="list">
-        {/* All jobs shortcut */}
         <li>
           <button
             id="sidebar-all"
@@ -27,11 +23,9 @@ export function PipelineSidebar({ activeStatus, counts, onSelect }: Props) {
             onClick={() => onSelect(null)}
             aria-current={activeStatus === null ? 'page' : undefined}
           >
-            <span className={styles.stageDot} style={{ background: 'var(--text-muted)' }} />
+            <span className={styles.stageDot} style={{ background: 'var(--text-faint)' }} />
             <span className={styles.stageName}>All jobs</span>
-            <span className={styles.stageCount}>
-              {Object.values(counts).reduce((a, b) => (a ?? 0) + (b ?? 0), 0)}
-            </span>
+            <span className={styles.stageCount}>{total}</span>
           </button>
         </li>
 
@@ -48,12 +42,9 @@ export function PipelineSidebar({ activeStatus, counts, onSelect }: Props) {
                 onClick={() => onSelect(status)}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <span
-                  className={styles.stageDot}
-                  style={{ background: STATUS_COLOR_VAR[status] }}
-                />
+                <span className={styles.stageDot} style={{ background: STATUS_COLOR_VAR[status] }} />
                 <span className={styles.stageName}>{STATUS_DISPLAY[status]}</span>
-                <span className={`${styles.stageCount} ${count > 0 && (status === 'manual_queue') ? styles.countPending : ''}`}>
+                <span className={`${styles.stageCount} ${count > 0 && status === 'manual_queue' ? styles.countPending : ''}`}>
                   {count}
                 </span>
               </button>

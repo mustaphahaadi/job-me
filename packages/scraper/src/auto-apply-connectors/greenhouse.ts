@@ -18,7 +18,7 @@ import type { AutoApplyConnector } from './base.js';
  *   npx playwright install --with-deps chromium
  */
 export class GreenhouseConnector implements AutoApplyConnector {
-  async apply(job: Job, cv: CvVersion | null): Promise<void> {
+  async apply(job: Job, cv: CvVersion | null, coverLetter?: string | null): Promise<void> {
     const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'];
     const LAST_NAME  = process.env['APPLICANT_LAST_NAME'];
     const EMAIL      = process.env['APPLICANT_EMAIL'];
@@ -61,11 +61,15 @@ export class GreenhouseConnector implements AutoApplyConnector {
       const fileInput = await page.$('input[type="file"]');
       if (!fileInput) throw new Error('No file input found on Greenhouse form — form structure may have changed.');
       await fileInput.setInputFiles(CV_PATH);
-
-      // Wait for upload to register
       await page.waitForTimeout(1500);
 
-      // ── Step 3: Submit ──────────────────────────────────────────
+      // ── Step 3: Cover letter (fill if field exists) ─────────────
+      if (coverLetter) {
+        const clField = await page.$('textarea[name="cover_letter"], textarea[id*="cover_letter" i], textarea[placeholder*="cover letter" i]');
+        if (clField) await clField.fill(coverLetter);
+      }
+
+      // ── Step 4: Submit ──────────────────────────────────────────
       const submitSelector = 'input[type="submit"], button[type="submit"]';
       const submitBtn = await page.$(submitSelector);
       if (!submitBtn) throw new Error('Submit button not found — form structure may have changed.');

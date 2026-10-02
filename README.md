@@ -1,270 +1,366 @@
-# 🚀 job-me — Automated Job Discovery & Tracking Pipeline
+# job-me
 
-> An open-source, production-ready TypeScript monorepo that automates job discovery, 5-signal match scoring, resume management, and ATS auto-applications for Tech, DevOps, Cloud, Platform, and Software Engineering roles.
+A self-hosted job application pipeline. Fork it, configure it for yourself, and let it run every 6 hours on GitHub Actions — scraping job boards, scoring every posting against your skillset, generating AI cover letters, and auto-applying to Greenhouse, Lever, and Workday roles.
 
----
-
-## 📋 Overview & Core Capabilities
-
-`job-me` is designed as a self-hosted, personal pipeline that takes the manual grind out of job hunting. It continuously monitors RSS feeds and REST APIs for tech roles, scores each posting against your exact skillset using a weighted multi-signal algorithm, and either auto-applies via headless Playwright automation or routes matches to a queue for manual review.
-
-- **Frontend SPA Dashboard**: Vite + React 18 dashboard to view match breakdowns, review queued jobs, manage sources, and update settings.
-- **5-Signal Scoring Engine**: Custom fuzzy-matching algorithm evaluating Title, Skills, Seniority, Location, and Recency Decay.
-- **Multi-Source Scraping**: Scrapes active RSS feeds and REST APIs with per-source failure isolation and deduplication.
-- **ATS Auto-Apply Automation**: Playwright (Chromium) automation for Greenhouse and ATS platforms with configurable rate limiting.
-- **Scheduled CI/CD Pipeline**: GitHub Actions cron workflow that downloads your active resume from Supabase Storage and executes scraping every 6 hours.
-
----
-
-## 🏗 Monorepo Architecture
-
-`job-me` is structured as a TypeScript monorepo managed with `pnpm` workspaces:
-
-```text
-job-me/
-├── apps/
-│   └── web/                   # Vite + React 18 SPA (Dashboard, Summary Bar, Sources, CV, Settings)
-├── packages/
-│   ├── shared/                # Shared TypeScript types, 5-signal match scoring engine, Supabase client
-│   └── scraper/               # Pipeline runner (scrape → match → auto-apply), RSS/API connectors, Playwright ATS
-├── supabase/
-│   └── migrations/            # Versioned SQL migrations (Schema, RLS policies, fail counters, default sources)
-├── .github/
-│   └── workflows/
-│       └── scrape.yml         # GitHub Actions 6-hour cron & manual pipeline runner with auto CV fetch
-├── .env.example               # Central environment variable template reference
-├── pnpm-workspace.yaml        # Workspace configuration
-└── package.json               # Root scripts for dev, build, typecheck, test, and pipeline execution
+```
+scrape → enrich (AI spam filter) → match (5-signal score) → auto-apply (AI cover letter)
 ```
 
 ---
 
-## 🛠 Tech Stack
+## What it does
 
-- **Frontend**: React 18, React Router v6, Lucide React, Vanilla CSS Tokens & Modules.
-- **Backend & Database**: Supabase (PostgreSQL, Row Level Security, Supabase Storage).
-- **Scraper & Automation**: Node.js, RSS Parser, Playwright (Chromium) for ATS form submission.
-- **Hosting & CI/CD**: Vercel (Frontend SPA) + GitHub Actions (Scheduled pipeline runner).
-- **Package Management**: `pnpm` workspace monorepo.
+- Scrapes 8 job board types on a 6-hour cron (RSS, API, LinkedIn, Indeed, Glassdoor, Otta, Jobicy, Arbeitnow)
+- Scores every job `0–100%` using a 5-signal algorithm (title, skills, seniority, location, recency)
+- Filters spam and confirms remote status using Gemini AI (free tier, optional)
+- Auto-applies to Greenhouse, Lever, and Workday roles above your score threshold
+- Generates a tailored AI cover letter per application
+- Dashboard to review, filter, dismiss, and manually apply to jobs
+- Full applications history with method, CV used, and score
 
 ---
 
-## ⚡ Local Development Quick Start
+## Stack
 
-### 1. Prerequisites
-- **Node.js**: `^20.0.0` or `v24.x`
-- **pnpm**: `^9.0.0` (`npm install -g pnpm`)
+| Layer | Tech |
+|---|---|
+| Frontend | React 18, React Router v6, CSS Modules |
+| Backend | Supabase (Postgres + RLS + Storage + Realtime) |
+| Scraper | Node.js, Playwright (Chromium), rss-parser |
+| AI | Google Gemini 1.5 Flash (free tier) |
+| CI/CD | GitHub Actions (6-hour cron + manual trigger) |
+| Hosting | Vercel (frontend) |
+| Package manager | pnpm workspaces |
 
-### 2. Clone Repository & Install Dependencies
+---
+
+## Project structure
+
+```
+job-me/
+├── apps/web/                        # Vite + React 18 dashboard
+│   └── src/
+│       ├── components/              # AppShell, JobCard, Drawer, FilterBar, etc.
+│       ├── pages/                   # Dashboard, Sources, Applications, CV, Settings
+│       ├── lib/                     # supabase.ts, github.ts
+│       └── styles/                  # tokens.css, global.css
+├── packages/
+│   ├── shared/src/                  # Types, scoring engine, Supabase client, Gemini client
+│   └── scraper/src/
+│       ├── connectors/              # rss, api, linkedin, indeed, glassdoor, otta, jobicy, arbeitnow
+│       ├── auto-apply-connectors/   # greenhouse, lever, workday
+│       └── pipeline/                # scrape → enrich → match → auto-apply
+├── supabase/migrations/             # 0001–0008 versioned SQL
+└── .github/workflows/scrape.yml     # 6-hour cron pipeline
+```
+
+---
+
+## Quick start (local dev)
+
+### Prerequisites
+
+- Node.js `^20` or `v24`
+- pnpm `^9` — `npm install -g pnpm`
+- A Supabase project (free tier is fine)
+
+### 1. Fork and clone
+
+**Fork first** — the pipeline runs from your own GitHub Actions, so you need your own copy.
+
+1. Click **Fork** on GitHub (top-right of this repo)
+2. Clone your fork:
+
 ```bash
-git clone https://github.com/your-username/job-me.git
+git clone https://github.com/YOUR_USERNAME/job-me.git
 cd job-me
 pnpm install
 ```
 
-### 3. Configure Local Environment Variables
+### 2. Set up Supabase
 
-Create `apps/web/.env`:
-```env
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-VITE_GITHUB_PAT=github_pat_xxxxxx
-VITE_GITHUB_REPO=your-username/job-me
+1. Create a project at [supabase.com](https://supabase.com) (free tier works)
+2. Go to **Project Settings → API** and note:
+   - Project URL
+   - Anon key
+   - Service Role key
+3. Go to **SQL Editor** and run each migration file in order:
+
+```
+supabase/migrations/0001_init.sql
+supabase/migrations/0002_rls.sql
+supabase/migrations/0003_schema_fixes.sql
+supabase/migrations/0004_fix_rls.sql
+supabase/migrations/0005_allow_anon_rls.sql
+supabase/migrations/0006_source_type_fix.sql
+supabase/migrations/0007_settings_auto_apply_cap.sql
+supabase/migrations/0008_cover_letter.sql
 ```
 
-Create `packages/scraper/.env`:
+> Migration `0005` seeds 12 live job sources automatically.
+> Migration `0006` seeds LinkedIn, Indeed, Jobicy, and Arbeitnow sources and widens the source type constraint.
+
+4. Go to **Storage → New bucket**, name it `cv-files`, set it to **Private**
+
+### 3. Create environment files
+
+**`apps/web/.env.local`**
+```env
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+
+# Optional — enables the "Run now" button on /sources
+VITE_GITHUB_PAT=github_pat_xxxxxx
+VITE_GITHUB_REPO=YOUR_USERNAME/job-me
+VITE_GITHUB_BRANCH=main
+```
+
+**`packages/scraper/.env`**
 ```env
 SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
 APPLICANT_FIRST_NAME=Jane
 APPLICANT_LAST_NAME=Doe
 APPLICANT_EMAIL=jane.doe@example.com
 APPLICANT_PHONE=+447123456789
-CV_FILE_PATH=/tmp/resume.pdf
+CV_FILE_PATH=/path/to/your-cv.pdf
+
+# Optional — enables AI cover letter generation and spam filtering
+# Free tier: 15 req/min, 1M tokens/day
+# Get key: https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=
 ```
 
-### 4. Local Execution Commands
+### 4. Run locally
+
 ```bash
-# Start Vite development server (http://localhost:5173)
-pnpm dev
-
-# Run TypeScript typecheck across all workspace packages
-pnpm typecheck
-
-# Build frontend production bundle
-pnpm build
-
-# Execute the Scrape → Match → Auto-Apply pipeline manually via CLI
-pnpm pipeline
+pnpm dev          # Dashboard at http://localhost:5173
+pnpm pipeline     # Run the full scrape → enrich → match → auto-apply pipeline once
+pnpm typecheck    # TypeScript check across all packages
+pnpm build        # Production build of the frontend
 ```
 
 ---
 
-## 🌐 Complete Setup Guide: Forking, Supabase, Vercel & Custom Domain
+## Full deployment
 
-Follow these exact steps to fork this repository and host your own live instance at full scale with a custom domain.
+### Step 1 — Deploy the frontend to Vercel
 
-```mermaid
-flowchart TD
-    A[Fork Repository on GitHub] --> B[Create Supabase Project]
-    B --> C[Run SQL Migrations 0001 - 0005]
-    C --> D[Create Storage Bucket 'cv-files' & Upload resume.pdf]
-    D --> E[Deploy apps/web to Vercel]
-    E --> F[Configure Custom Domain & DNS Records in Vercel]
-    F --> G[Add GitHub Actions Secrets & PAT]
-    G --> H[Run Live Automated Job Pipeline!]
-```
+1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import your fork
+2. Configure the project:
 
----
-
-### Step 1: Fork & Clone the Repository
-
-1. Click the **Fork** button at the top right of this repository on GitHub.
-2. Clone your forked repository to your local machine:
-   ```bash
-   git clone https://github.com/<your-github-username>/job-me.git
-   cd job-me
-   ```
-
----
-
-### Step 2: Supabase Setup (Database & Storage)
-
-1. **Create a Supabase Project**:
-   - Log in to [Supabase](https://supabase.com) and create a new project.
-   - Note down your project **Reference ID**, **Project URL**, **Anon (public) Key**, and **Service Role (secret) Key** from **Project Settings → API**.
-
-2. **Execute Database Migrations**:
-   - Go to **SQL Editor** in your Supabase Dashboard.
-   - Run each SQL file in `supabase/migrations/` in order:
-     - `0001_init.sql` (Creates core tables: `sources`, `jobs`, `cv_versions`, `applications`, `settings`).
-     - `0002_rls.sql` (Enables Row Level Security).
-     - `0003_schema_fixes.sql` (Adds `raw_location` and `consecutive_fail_count`).
-     - `0004_fix_rls.sql` (Sets up base RLS owner policies).
-     - `0005_allow_anon_rls.sql` (Configures permissions for frontend/service role and seeds live job sources).
-
-3. **Configure Storage Bucket**:
-   - Go to **Storage** in your Supabase Dashboard.
-   - Create a new bucket named `cv-files` (Set to **Private**).
-   - Upload your resume PDF file and name it `resume.pdf`.
-
----
-
-### Step 3: Vercel Deployment & Custom Domain Setup
-
-#### 1. Import Repository into Vercel
-1. Log in to [Vercel](https://vercel.com) and click **Add New → Project**.
-2. Select your forked `job-me` GitHub repository.
-
-#### 2. Project Configuration
-- **Framework Preset**: `Vite`
-- **Root Directory**: Click *Edit* and set to `apps/web`
-- **Build Command**: `pnpm --filter @job-me/web build`
-- **Output Directory**: `dist`
-- **Install Command**: `pnpm install`
-
-#### 3. Set Environment Variables in Vercel
-Add the following under **Environment Variables**:
-
-| Variable | Value | Notes |
-|---|---|---|
-| `VITE_SUPABASE_URL` | `https://<your-project-ref>.supabase.co` | Required |
-| `VITE_SUPABASE_ANON_KEY` | `<your-supabase-anon-key>` | Required |
-| `VITE_GITHUB_PAT` | `github_pat_xxxxxx` | Optional: Enables manual trigger button on `/sources` page |
-| `VITE_GITHUB_REPO` | `<your-github-username>/job-me` | Optional: GitHub repository path |
-
-Click **Deploy**.
-
-#### 4. Configure Your Custom Domain in Vercel
-1. In your Vercel Project Dashboard, navigate to **Settings → Domains**.
-2. Enter your custom domain name (e.g. `jobs.yourdomain.com` or `yourdomain.com`) and click **Add**.
-3. Configure the DNS records at your domain registrar (e.g. Cloudflare, Namecheap, GoDaddy):
-   - **For Apex Domain (`yourdomain.com`)**:
-     - **Record Type**: `A`
-     - **Name / Host**: `@`
-     - **Value / Target**: `76.76.21.21`
-   - **For Subdomain (`jobs.yourdomain.com`)**:
-     - **Record Type**: `CNAME`
-     - **Name / Host**: `jobs`
-     - **Value / Target**: `cname.vercel-dns.com`
-4. Vercel will automatically verify DNS propagation and issue a free SSL certificate within a few minutes.
-
----
-
-### Step 4: Configure GitHub Actions Automation Pipeline
-
-The scraper runs automatically in GitHub Actions every 6 hours via `.github/workflows/scrape.yml`.
-
-#### 1. Set Repository Secrets
-In your GitHub repository, go to **Settings → Secrets and variables → Actions** and click **New repository secret**. Add:
-
-| Secret Name | Description / Example Value |
+| Setting | Value |
 |---|---|
-| `SUPABASE_URL` | `https://<your-project-ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase `service_role` secret key |
-| `APPLICANT_FIRST_NAME` | Your first name (e.g. `Jane`) |
-| `APPLICANT_LAST_NAME` | Your last name (e.g. `Doe`) |
-| `APPLICANT_EMAIL` | Your email address for job submissions |
-| `APPLICANT_PHONE` | Your phone number (e.g. `+1234567890`) |
+| Framework Preset | `Vite` |
+| Root Directory | `apps/web` |
+| Build Command | `pnpm --filter @job-me/web build` |
+| Output Directory | `dist` |
+| Install Command | `pnpm install` |
 
-#### 2. Configure Personal Access Token (PAT) for Manual Triggering (Optional)
-To trigger scraper runs directly from the web app's `/sources` UI:
-1. Go to your GitHub account **Settings → Developer Settings → Personal Access Tokens → Fine-grained tokens**.
-2. Generate a token with repository access to your `job-me` fork and permission **Actions: Read and write**.
-3. Add this token as `VITE_GITHUB_PAT` in your Vercel project environment variables.
+3. Add environment variables under **Settings → Environment Variables**:
+
+| Variable | Value |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://your-project-ref.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
+| `VITE_GITHUB_PAT` | GitHub PAT with `repo` + `workflow` scopes (optional) |
+| `VITE_GITHUB_REPO` | `YOUR_USERNAME/job-me` (optional) |
+| `VITE_GITHUB_BRANCH` | `main` (optional) |
+
+4. Click **Deploy**
+
+#### Custom domain (optional)
+
+- Apex domain (`yourdomain.com`) → DNS `A` record → `76.76.21.21`
+- Subdomain (`jobs.yourdomain.com`) → DNS `CNAME` → `cname.vercel-dns.com`
+
+Vercel provisions SSL automatically.
+
+### Step 2 — Configure GitHub Actions secrets
+
+Go to your fork → **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret | Description |
+|---|---|
+| `SUPABASE_URL` | `https://your-project-ref.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+| `APPLICANT_FIRST_NAME` | Your first name |
+| `APPLICANT_LAST_NAME` | Your last name |
+| `APPLICANT_EMAIL` | Your email for job applications |
+| `APPLICANT_PHONE` | Your phone e.g. `+447123456789` |
+| `GEMINI_API_KEY` | Gemini API key (optional — enables AI features) |
+
+The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button (requires `VITE_GITHUB_PAT`).
+
+### Step 3 — Upload your CV
+
+1. Open the dashboard → go to `/cv`
+2. Upload your CV (PDF)
+3. Set it as the default for your target roles
+
+The pipeline reads the latest uploaded CV from the database automatically — no hardcoded paths.
+
+### Step 4 — Configure your settings
+
+Go to `/settings` and set:
+
+- **Target roles** — job title keywords for the scoring engine
+- **Target seniority** — junior / mid / senior / any
+- **Accepted locations** — e.g. `remote`, `uk`, `worldwide`
+- **Negative keywords** — any keyword that immediately disqualifies a job
+- **Skill vocabulary** — skills from your CV used for the skills overlap signal
+- **Auto-apply threshold** — minimum score to trigger auto-apply (default 75%)
+- **Max auto-apply per run** — rate cap per pipeline run (default 5)
+
+### Step 5 — Get a Gemini API key (optional, free)
+
+1. Go to [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+2. Click **Create API key**
+3. Add it as `GEMINI_API_KEY` in both GitHub Actions secrets and `packages/scraper/.env`
+
+Free tier: **15 requests/minute, 1 million tokens/day** — more than enough.
+
+With a key set, the pipeline will:
+- Filter spam/fake/MLM postings before scoring
+- Confirm remote status on ambiguous listings
+- Generate a tailored 3-paragraph cover letter per auto-apply
+
+Without a key, the pipeline runs normally — AI steps are silently skipped.
 
 ---
 
-### Step 5: Personalization & Running at Full Scale
+## Dashboard pages
 
-Once deployed, open your dashboard on your domain and personalize your pipeline:
-
-1. **Configure Target Settings (`/settings`)**:
-   - Set target job titles (e.g., `Cloud Engineer`, `DevOps Engineer`, `AWS Instructor`, `Platform Engineer`, `SRE`).
-   - Set target seniority level (`junior`, `mid`, `senior`, `any`).
-   - Define accepted job locations (`remote`, `uk`, `united states`).
-   - Set `Auto-Apply Score Threshold` (default: `0.75`).
-   - Add negative keywords (e.g., `clearance required`, `unpaid`, `c2c`).
-
-2. **Manage Job Sources (`/sources`)**:
-   - Enable or disable built-in job sources (Remotive, WeWorkRemotely, RemoteOK, NoDesk, HackerNews Jobs, Dev.to).
-   - Add new RSS feeds or JSON API endpoints directly from the UI.
-   - Use the **Run Pipeline Now** button to execute a scrape on demand.
-
-3. **Manage CVs (`/cv`)**:
-   - Upload role-specific CV versions.
-   - Tag CVs with target roles so the pipeline selects the right resume during auto-applications.
-
----
-
-## 🎯 5-Signal Match Scoring Engine
-
-Located in `packages/shared/src/scoring.ts`, `scoreJob()` scores every scraped posting from `0.00` to `1.00` based on 5 weighted signals:
-
-| Signal | Weight | Evaluation Logic |
+| Page | Route | Description |
 |---|---|---|
-| **Title Match** | **0.40** | Fuzzy token match against configured target roles |
-| **Skills Overlap** | **0.30** | Matches key target skills in description text |
-| **Seniority Level** | **0.15** | Matches target seniority against title tokens |
-| **Location** | **0.10** | Validates raw location against accepted locations |
-| **Recency Decay** | **0.05** | Exponential score reduction based on days since posting |
-
-*Note: Jobs containing any negative keyword hit are immediately closed with score forced to `0.00`.*
+| Dashboard | `/` | Job list with pipeline sidebar, filter bar, and detail drawer |
+| Sources | `/sources` | Add/edit/toggle job board sources, trigger manual runs |
+| Applications | `/applications` | Full history of every auto and manual application |
+| CV | `/cv` | Upload CV versions, set defaults per role |
+| Settings | `/settings` | Target roles, seniority, locations, skills, thresholds |
 
 ---
 
-## 🧪 Testing & Code Quality
+## Scoring engine
 
-```bash
-# Typecheck all packages
-pnpm typecheck
+Every job is scored `0.00–1.00` across 5 signals:
 
-# Build web frontend
-pnpm build
+| Signal | Weight | Logic |
+|---|---|---|
+| Title match | **40%** | Fuzzy match against your target roles |
+| Skills overlap | **30%** | Keyword match against your skill vocabulary in the description |
+| Seniority | **15%** | Detected level vs target; adjacent levels get partial credit |
+| Location | **10%** | Raw location vs your accepted locations list |
+| Recency decay | **5%** | Exponential decay — 14-day-old post scores ~37% |
+
+A negative keyword hit forces the score to `0.00` immediately.
+
+---
+
+## Source connectors
+
+| Type | Connector | Notes |
+|---|---|---|
+| `rss` | Generic RSS/Atom | WeWorkRemotely, Remotive, NoDesk, HN Jobs, Dev.to |
+| `api` | Generic REST API | RemoteOK, Remotive API |
+| `arbeitnow` | Arbeitnow | Free EU/remote API, no key needed |
+| `jobicy` | Jobicy | Free remote API, no key needed |
+| `linkedin` | LinkedIn (Playwright) | Headless scraper, no login, first ~25 public results |
+| `indeed` | Indeed RSS | Public RSS feed |
+| `glassdoor` | Glassdoor RSS | Public RSS feed |
+| `otta` | Otta API | Free public API |
+
+---
+
+## Auto-apply connectors
+
+| ATS | URL pattern matched |
+|---|---|
+| Greenhouse | `greenhouse.io`, `boards.greenhouse.io` |
+| Lever | `jobs.lever.co`, `lever.co/` |
+| Workday | `myworkdayjobs.com`, `wd3.myworkday.com`, `wd1.myworkday.com` |
+
+Jobs with no matching connector go to **Manual Queue** automatically.
+
+---
+
+## Adding job sources
+
+From `/sources`, click **Add source**:
+
+- **Name** — display name
+- **Type** — connector type from the table above
+- **Base URL** — the feed or API endpoint
+- **Query params** — JSON object of URL parameters
+
+### Example configs
+
+**Indeed RSS — DevOps Remote**
+```json
+{
+  "type": "indeed",
+  "base_url": "https://www.indeed.com/rss",
+  "query_params": { "q": "devops engineer", "l": "Remote", "sort": "date", "fromage": "7" }
+}
+```
+
+**LinkedIn — SRE Worldwide**
+```json
+{
+  "type": "linkedin",
+  "base_url": "https://www.linkedin.com/jobs/search",
+  "query_params": { "keywords": "site reliability engineer", "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800" }
+}
+```
+
+**WeWorkRemotely RSS**
+```json
+{
+  "type": "rss",
+  "base_url": "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
+  "query_params": {}
+}
+```
+
+**Jobicy — Terraform**
+```json
+{
+  "type": "jobicy",
+  "base_url": "https://jobicy.com/api/v2/remote-jobs",
+  "query_params": { "tag": "terraform", "count": "50" }
+}
 ```
 
 ---
 
-## 📜 License
+## Environment variables reference
 
-MIT License — free for personal and commercial adaptation.
+### `apps/web/.env.local`
+
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_SUPABASE_URL` | ✅ | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase anon key (safe to expose in frontend) |
+| `VITE_GITHUB_PAT` | Optional | GitHub PAT — enables "Run now" button |
+| `VITE_GITHUB_REPO` | Optional | `username/repo` — required if PAT is set |
+| `VITE_GITHUB_BRANCH` | Optional | Branch to trigger workflow on (default: `main`) |
+
+### `packages/scraper/.env`
+
+| Variable | Required | Description |
+|---|---|---|
+| `SUPABASE_URL` | ✅ | Your Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key — bypasses RLS, keep secret |
+| `APPLICANT_FIRST_NAME` | ✅ | Used in auto-apply form fields |
+| `APPLICANT_LAST_NAME` | ✅ | Used in auto-apply form fields |
+| `APPLICANT_EMAIL` | ✅ | Used in auto-apply form fields |
+| `APPLICANT_PHONE` | ✅ | Used in auto-apply form fields |
+| `CV_FILE_PATH` | ✅ | Local path to CV PDF for auto-apply file upload |
+| `GEMINI_API_KEY` | Optional | Enables AI spam filtering and cover letter generation |
+
+---
+
+## License
+
+MIT — free for personal and commercial use.

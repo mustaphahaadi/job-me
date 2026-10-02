@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 import { Upload, Star, Trash2 } from 'lucide-react';
-import type { CvVersion } from '@job-me/shared';
+import type { CvVersion, Settings } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import styles from './CvVersions.module.css';
 
-const ROLE_OPTIONS = ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer'];
-
-function formatDate(dt: string): string {
-  return new Date(dt).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-}
-
-/**
- * /cv — upload and manage CV versions.
- */
 export default function CvVersions() {
   const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
+  const [roleOptions, setRoleOptions] = useState<string[]>(['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer']);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
@@ -25,8 +19,16 @@ export default function CvVersions() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    void supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false })
-      .then(({ data }) => { if (data) setCvVersions(data as CvVersion[]); });
+    void Promise.all([
+      supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false }),
+      supabase.from('settings').select('target_roles').eq('id', 1).single(),
+    ]).then(([cvRes, settingsRes]) => {
+      if (cvRes.data) setCvVersions(cvRes.data as CvVersion[]);
+      if (settingsRes.data) {
+        const roles = (settingsRes.data as Pick<Settings, 'target_roles'>).target_roles;
+        if (roles?.length) setRoleOptions(roles);
+      }
+    });
   }, []);
 
   async function handleUpload(e: React.FormEvent) {
@@ -126,7 +128,7 @@ export default function CvVersions() {
         <div className={styles.field}>
           <label className={styles.fieldLabel}>Role tags</label>
           <div className={styles.tagGroup}>
-            {ROLE_OPTIONS.map(role => (
+            {roleOptions.map(role => (
               <label key={role} className={styles.checkLabel}>
                 <input type="checkbox" checked={roleTags.includes(role)}
                   onChange={() => setRoleTags(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])}
@@ -140,7 +142,7 @@ export default function CvVersions() {
         <div className={styles.field}>
           <label className={styles.fieldLabel}>Set as default for</label>
           <div className={styles.tagGroup}>
-            {ROLE_OPTIONS.map(role => (
+            {roleOptions.map(role => (
               <label key={role} className={styles.checkLabel}>
                 <input type="checkbox" checked={isDefaultFor.includes(role)}
                   onChange={() => setIsDefaultFor(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])}
@@ -185,7 +187,7 @@ export default function CvVersions() {
               </div>
               <div className={styles.defaultRow}>
                 <span className={styles.defaultLabel}>Default for:</span>
-                {ROLE_OPTIONS.map(role => {
+                {roleOptions.map(role => {
                   const isDefault = cv.is_default_for.includes(role);
                   return (
                     <button

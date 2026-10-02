@@ -8,6 +8,7 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "noEmit": true,
+    "types": ["node"],
     "paths": {
       "@job-me/shared": ["../../packages/shared/src/index.ts"]
     }
