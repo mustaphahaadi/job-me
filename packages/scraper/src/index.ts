@@ -32,6 +32,6 @@ async function main(): Promise<void> {
 }
 
 main().catch(err => {
-  console.error('[job-me] Unhandled pipeline error:', err);
+  console.error('[job-me] Unhandled pipeline error:', String(err).replace(/[\r\n]/g, ' '));
   process.exit(1);
 });

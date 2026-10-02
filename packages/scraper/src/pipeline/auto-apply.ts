@@ -39,7 +39,7 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
     .eq('status', 'matched')
     .gte('match_score', settings.auto_apply_score_threshold);
 
-  if (error) throw new Error(`[auto-apply] Failed to fetch eligible jobs: ${error.message}`);
+  if (error) throw new Error(`[auto-apply] Failed to fetch eligible jobs: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
   if (!jobs || jobs.length === 0) {
     console.log('[auto-apply] No eligible jobs.');
     return;

@@ -76,7 +76,7 @@ export class GreenhouseConnector implements AutoApplyConnector {
 
       await submitBtn.click();
 
-      // ── Step 4: Confirm submission ──────────────────────────────
+      // ── Step 5: Confirm submission ──────────────────────────────
       // Wait for a confirmation indicator — Greenhouse typically shows "Application submitted"
       try {
         await page.waitForSelector(

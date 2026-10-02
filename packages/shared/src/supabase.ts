@@ -38,7 +38,7 @@ export async function getOrInitSettings(supabase: SupabaseClient): Promise<Setti
     .single();
 
   if (error || !inserted) {
-    console.warn(`[settings] Could not auto-insert settings row (${error?.message ?? 'unknown'}). Falling back to in-memory defaults.`);
+    console.warn(`[settings] Could not auto-insert settings row (${String(error?.message ?? 'unknown').replace(/[\r\n]/g, ' ')}). Falling back to in-memory defaults.`);
     return DEFAULT_SETTINGS;
   }
 

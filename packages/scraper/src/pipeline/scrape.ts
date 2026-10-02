@@ -22,7 +22,7 @@ export async function runScrape(supabase: SupabaseClient): Promise<void> {
     .select('*')
     .eq('active', true);
 
-  if (error) throw new Error(`Failed to fetch sources: ${error.message}`);
+  if (error) throw new Error(`Failed to fetch sources: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
   if (!sources || sources.length === 0) {
     console.log('[scrape] No active sources found in database. Add job sources on the /sources page or insert rows into the sources table.');
     return;
@@ -119,7 +119,7 @@ async function upsertJobs(
       matched_keywords: [],
     }));
     const { error } = await supabase.from('jobs').insert(rows);
-    if (error) console.error(`[scrape] Batch insert error: ${error.message}`);
+    if (error) console.error(`[scrape] Batch insert error: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
     else console.log(`[scrape] Inserted ${toInsert.length} new job(s).`);
   }
 
@@ -143,7 +143,7 @@ async function upsertJobs(
       for (const r of results) {
         if (r.error) {
           updateErrors++;
-          console.error(`[scrape] Batch update error: ${r.error.message}`);
+          console.error(`[scrape] Batch update error: ${String(r.error.message).replace(/[\r\n]/g, ' ')}`);
         }
       }
     }

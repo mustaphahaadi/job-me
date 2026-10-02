@@ -63,7 +63,7 @@ export class LeverConnector implements AutoApplyConnector {
       if (!submitBtn) throw new Error('Submit button not found — form structure may have changed.');
       await submitBtn.click();
 
-      // ── Step 4: Confirm ─────────────────────────────────────────
+      // ── Step 5: Confirm ─────────────────────────────────────────
       try {
         await page.waitForSelector(
           'text=Application submitted, text=Thank you, text=successfully submitted, text=application received',

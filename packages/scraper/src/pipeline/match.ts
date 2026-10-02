@@ -19,13 +19,13 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
     .select('*')
     .eq('status', 'new');
 
-  if (error) throw new Error(`[match] Failed to fetch new jobs: ${error.message}`);
+  if (error) throw new Error(`[match] Failed to fetch new jobs: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
   if (!jobs || jobs.length === 0) {
     console.log('[match] No new jobs to score.');
     return;
   }
 
-  console.log(`[match] Scoring ${jobs.length} job(s).`);
+  console.log(`[match] Scoring ${jobs.length} job(s).`); // jobs.length is a number, safe to log
   let matched = 0;
 
   for (const job of jobs as Job[]) {
@@ -58,5 +58,5 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
     }).eq('id', job.id);
   }
 
-  console.log(`[match] Done. ${matched}/${jobs.length} job(s) matched.`);
+  console.log(`[match] Done. ${matched}/${jobs.length} job(s) matched.`); // numeric values, safe to log
 }

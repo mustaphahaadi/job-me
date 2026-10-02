@@ -6,7 +6,7 @@ import styles from './Settings.module.css';
 
 const EMPTY_SETTINGS: Settings = {
   id: 1,
-  target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor'],
+  target_roles: ['Software Engineer', 'Backend Engineer', 'Full Stack Engineer'],
   days_posted_default: 14,
   auto_apply_score_threshold: 0.75,
   max_auto_apply_per_run: 5,
@@ -129,7 +129,7 @@ export default function SettingsPage() {
           </div>
           <div className={styles.presetGroup}>
             <span className={styles.presetLabel}>Quick add:</span>
-            {['Cloud Engineer', 'DevOps Engineer', 'SRE', 'Platform Engineer', 'AWS Instructor'].map(preset => (
+            {['Software Engineer', 'Backend Engineer', 'Frontend Engineer', 'Full Stack Engineer', 'Data Engineer'].map(preset => (
               !settings.target_roles.includes(preset) && (
                 <button key={preset} type="button" className={styles.presetChip}
                   onClick={() => setSettings(s => ({ ...s, target_roles: [...s.target_roles, preset] }))}>
@@ -181,7 +181,7 @@ export default function SettingsPage() {
           </div>
           <div className={styles.presetGroup}>
             <span className={styles.presetLabel}>Quick add:</span>
-            {['remote', 'uk', 'united kingdom', 'london'].map(preset => (
+            {['remote', 'worldwide', 'us', 'uk', 'europe'].map(preset => (
               !(settings.accepted_locations ?? []).includes(preset) && (
                 <button key={preset} type="button" className={styles.presetChip}
                   onClick={() => setSettings(s => ({ ...s, accepted_locations: [...(s.accepted_locations ?? []), preset] }))}>

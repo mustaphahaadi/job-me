@@ -22,7 +22,7 @@ async function clearDb(): Promise<void> {
     .neq('id', '00000000-0000-0000-0000-000000000000');
 
   if (appErr) {
-    console.error('Failed to clear applications:', appErr.message);
+    console.error('Failed to clear applications:', String(appErr.message).replace(/[\r\n]/g, ' '));
   } else {
     console.log('✓ Cleared applications table');
   }
@@ -33,7 +33,7 @@ async function clearDb(): Promise<void> {
     .neq('id', '00000000-0000-0000-0000-000000000000');
 
   if (jobErr) {
-    console.error('Failed to clear jobs:', jobErr.message);
+    console.error('Failed to clear jobs:', String(jobErr.message).replace(/[\r\n]/g, ' '));
   } else {
     console.log('✓ Cleared jobs table');
   }
@@ -42,6 +42,6 @@ async function clearDb(): Promise<void> {
 }
 
 clearDb().catch(err => {
-  console.error('[clearDb] Unhandled error:', err);
+  console.error('[clearDb] Unhandled error:', String(err).replace(/[\r\n]/g, ' '));
   process.exit(1);
 });

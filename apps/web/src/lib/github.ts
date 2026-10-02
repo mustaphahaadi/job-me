@@ -30,7 +30,8 @@ export async function triggerScrapeNow(): Promise<void> {
 
   if (!res.ok && res.status !== 204) {
     const text = await res.text();
-    console.error('GitHub dispatch failed:', res.status, text);
+    const safeText = text.replace(/[\r\n]/g, ' ').slice(0, 200);
+    console.error('GitHub dispatch failed:', res.status, safeText);
     alert(`Failed to trigger scrape: ${res.status} ${res.statusText}. Check the browser console.`);
   }
 }

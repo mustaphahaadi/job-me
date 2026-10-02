@@ -18,7 +18,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string | null
   });
 
   if (!res.ok) {
-    console.warn(`[ai] Gemini API error: ${res.status} ${res.statusText}`);
+    console.warn(`[ai] Gemini API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')}`);
     return null;
   }
 

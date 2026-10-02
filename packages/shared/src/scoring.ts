@@ -55,9 +55,8 @@ function titleMatchScore(jobTitle: string, targetRoles: string[]): { score: numb
 
   // Also check single-word aliases that are strong signals regardless of target_roles
   const STRONG_ALIASES = [
-    'devops', 'sre', 'platform engineer', 'cloud engineer', 'cloud architect',
-    'infrastructure engineer', 'site reliability', 'aws engineer', 'aws architect',
-    'solutions architect', 'systems engineer', 'trainer', 'instructor',
+    'engineer', 'developer', 'architect', 'analyst', 'designer',
+    'manager', 'lead', 'principal', 'staff', 'consultant',
   ];
   for (const alias of STRONG_ALIASES) {
     if (titleLower.includes(alias)) {
@@ -162,7 +161,7 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   }
 
   // ── Location ──────────────────────────────────────────────────────────────
-  const ALWAYS_ACCEPTED = ['remote', 'worldwide', 'anywhere', 'global', 'africa', 'ghana', 'emea'];
+  const ALWAYS_ACCEPTED = ['remote', 'worldwide', 'anywhere', 'global', 'emea'];
   const locationAccepted =
     acceptedLocations.length === 0 ||
     acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase())) ||

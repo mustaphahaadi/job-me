@@ -96,23 +96,22 @@ export interface Settings {
 }
 
 export const DEFAULT_SKILL_VOCABULARY = [
-  'aws', 'ec2', 's3', 'lambda', 'rds', 'vpc', 'iam', 'cloudformation',
-  'cloudwatch', 'eks', 'ecs', 'fargate', 'route53', 'cloudfront',
-  'docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'helm',
-  'ci/cd', 'github actions', 'jenkins', 'gitlab ci', 'circleci',
-  'python', 'bash', 'linux', 'devops', 'sre', 'cloud',
-  'monitoring', 'observability', 'prometheus', 'grafana', 'elk',
-  'networking', 'load balancer', 'nginx', 'apache',
+  'javascript', 'typescript', 'python', 'java', 'go', 'rust', 'sql',
+  'react', 'node.js', 'rest api', 'graphql', 'html', 'css',
+  'docker', 'kubernetes', 'linux', 'git', 'ci/cd', 'github actions',
+  'aws', 'gcp', 'azure', 'terraform', 'cloud',
+  'postgresql', 'mysql', 'mongodb', 'redis',
+  'testing', 'unit tests', 'agile', 'scrum',
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
   id: 1,
-  target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor', 'Platform Engineer', 'Site Reliability Engineer'],
+  target_roles: ['Software Engineer', 'Backend Engineer', 'Full Stack Engineer'],
   days_posted_default: 14,
   auto_apply_score_threshold: 0.75,
   max_auto_apply_per_run: 5,
   target_seniority: 'mid',
-  accepted_locations: ['remote', 'worldwide', 'anywhere', 'global', 'africa', 'ghana'],
+  accepted_locations: ['remote', 'worldwide', 'anywhere', 'global'],
   negative_keywords: [],
   skill_vocabulary: DEFAULT_SKILL_VOCABULARY,
 };
