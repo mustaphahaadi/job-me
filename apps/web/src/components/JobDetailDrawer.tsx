@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, X, RotateCcw, CheckCheck, XCircle, Copy, Check, MapPin } from 'lucide-react';
+import { ExternalLink, X, RotateCcw, CheckCheck, XCircle, Copy, Check, MapPin, Trash2 } from 'lucide-react';
 import type { Job, CvVersion, MatchBreakdown } from '@job-me/shared';
 import { STATUS_DISPLAY } from '@job-me/shared';
 import { PipelineTrack } from './PipelineTrack';
@@ -15,6 +15,7 @@ interface Props {
   onDismiss: (jobId: string) => void;
   onRequeue: (jobId: string) => void;
   onSwapCv: (jobId: string, cvVersionId: string) => void;
+  onDelete?: (jobId: string) => void;
 }
 
 function formatDateTime(dt: string | null): string {
@@ -107,7 +108,7 @@ function CoverLetterSection({ text }: { text: string }) {
 
 export function JobDetailDrawer({
   job, cvVersions, sourceName, onClose,
-  onMarkApplied, onDismiss, onRequeue, onSwapCv,
+  onMarkApplied, onDismiss, onRequeue, onSwapCv, onDelete,
 }: Props) {
   const drawerRef = useRef<HTMLElement>(null);
 
@@ -214,6 +215,15 @@ export function JobDetailDrawer({
                 >
                   <XCircle size={13} /> Dismiss
                 </button>
+                {onDelete && (
+                  <button
+                    id="drawer-delete-btn"
+                    className={`${styles.btn} ${styles.btnDanger}`}
+                    onClick={() => { onDelete(job.id); onClose(); }}
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                )}
               </div>
             </div>
 
