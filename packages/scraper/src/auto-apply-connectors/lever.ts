@@ -11,6 +11,7 @@ import type { AutoApplyConnector } from './base.js';
  *   - Phone (optional)
  *   - Resume upload
  *   - LinkedIn / website (optional, skipped)
+ *   - Additional info (optional cover letter / comments field)
  *   - Submit button
  */
 export class LeverConnector implements AutoApplyConnector {
@@ -29,16 +30,18 @@ export class LeverConnector implements AutoApplyConnector {
     }
 
     const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    });
     const page = await context.newPage();
 
     try {
-      await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      await page.goto(job.url, { waitUntil: 'networkidle', timeout: 30_000 });
 
       // ── Step 1: Fill basic fields ───────────────────────────────
       // Lever uses a single "Full name" field
-      const fullNameSelector = 'input[name="name"], input[placeholder*="name" i], input[id*="name" i]';
-      await page.waitForSelector(fullNameSelector, { timeout: 10_000 });
+      const fullNameSelector = 'input[name="name"], input[placeholder*="name" i]:not([placeholder*="company" i])';
+      await page.waitForSelector(fullNameSelector, { timeout: 15_000 });
       await page.fill(fullNameSelector, `${FIRST_NAME} ${LAST_NAME}`);
 
       await page.fill('input[name="email"], input[type="email"]', EMAIL);
@@ -50,11 +53,13 @@ export class LeverConnector implements AutoApplyConnector {
       const fileInput = await page.$('input[type="file"]');
       if (!fileInput) throw new Error('No file input found on Lever form — form structure may have changed.');
       await fileInput.setInputFiles(CV_PATH);
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2000);
 
-      // ── Step 3: Cover letter (fill if field exists) ─────────────
+      // ── Step 3: Cover letter / comments (fill if field exists) ──
       if (coverLetter) {
-        const clField = await page.$('textarea[name="comments"], textarea[id*="cover" i], textarea[placeholder*="cover letter" i], textarea[placeholder*="additional" i]');
+        const clField = await page.$(
+          'textarea[name="comments"], textarea[id*="cover" i], textarea[placeholder*="cover letter" i], textarea[placeholder*="additional" i], textarea[placeholder*="tell us" i]'
+        );
         if (clField) await clField.fill(coverLetter);
       }
 
@@ -64,17 +69,21 @@ export class LeverConnector implements AutoApplyConnector {
       await submitBtn.click();
 
       // ── Step 5: Confirm ─────────────────────────────────────────
-      try {
-        await page.waitForSelector(
-          'text=Application submitted, text=Thank you, text=successfully submitted, text=application received',
-          { timeout: 15_000 }
-        );
-      } catch {
+      const confirmed = await Promise.any([
+        page.waitForSelector('text=Application submitted', { timeout: 15_000 }).then(() => true),
+        page.waitForSelector('text=Thank you', { timeout: 15_000 }).then(() => true),
+        page.waitForSelector('text=successfully submitted', { timeout: 15_000 }).then(() => true),
+        page.waitForSelector('text=application received', { timeout: 15_000 }).then(() => true),
+        page.waitForURL(url => !url.href.includes('/apply'), { timeout: 15_000 }).then(() => true),
+      ]).catch(() => false);
+
+      if (!confirmed) {
         const finalUrl = page.url();
         if (finalUrl === job.url || finalUrl.includes('/apply')) {
           throw new Error('Application may not have submitted — no confirmation text found and URL did not change.');
         }
       }
+
     } finally {
       await browser.close();
     }
