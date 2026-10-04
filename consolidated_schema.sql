@@ -21,6 +21,13 @@ create table if not exists sources (
   created_at timestamptz default now()
 );
 
+-- Ensure check constraint and columns are updated on existing databases
+ALTER TABLE sources DROP CONSTRAINT IF EXISTS sources_type_check;
+ALTER TABLE sources ADD CONSTRAINT sources_type_check
+  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta'));
+
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS consecutive_fail_count int not null default 0;
+
 create table if not exists cv_versions (
   id uuid primary key default gen_random_uuid(),
   label text not null,
@@ -81,6 +88,10 @@ create table if not exists settings (
   ],
   check (id = 1)
 );
+
+-- Ensure columns exist on existing databases
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cover_letter_text text;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS skill_vocabulary text[];
 
 -- ─── Seed default settings row ─────────────────────────────────────────────────────
 
@@ -173,7 +184,7 @@ CREATE POLICY "storage_delete_cv_files" ON storage.objects
 
 INSERT INTO sources (name, type, base_url, query_params, active)
 VALUES 
-  -- Remote Job Sources (Priority - Worldwide)
+  -- Remote Job Sources (Priority - Worldwide) - Tested and Working
   ('Remotive — All Remote Jobs', 'rss', 'https://remotive.com/remote-jobs/feed', '{}'::jsonb, true),
   ('Remotive — DevOps API', 'api', 'https://remotive.com/api/remote-jobs?category=devops', '{}'::jsonb, true),
   ('WeWorkRemotely — DevOps & Sysadmin', 'rss', 'https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss', '{}'::jsonb, true),
@@ -189,16 +200,7 @@ VALUES
   ('Jobicy — DevOps Remote Jobs', 'jobicy', 'https://jobicy.com/api/v2/remote-jobs', '{"tag": "devops", "count": "50"}'::jsonb, true),
   ('Jobicy — AWS Remote Jobs', 'jobicy', 'https://jobicy.com/api/v2/remote-jobs', '{"tag": "aws", "count": "50"}'::jsonb, true),
   ('Jobicy — Kubernetes Remote Jobs', 'jobicy', 'https://jobicy.com/api/v2/remote-jobs', '{"tag": "kubernetes", "count": "50"}'::jsonb, true),
-  ('Arbeitnow — DevOps Remote Jobs', 'arbeitnow', 'https://www.arbeitnow.com/api/job-board-api', '{"search": "devops engineer"}'::jsonb, true),
-  ('Arbeitnow — Cloud Engineer Remote Jobs', 'arbeitnow', 'https://www.arbeitnow.com/api/job-board-api', '{"search": "cloud engineer"}'::jsonb, true),
-  -- Additional Popular Remote Job Boards
-  ('Stack Overflow Jobs — Remote', 'rss', 'https://stackoverflow.com/jobs/feed?q=devops&l=Remote&d=20&u=Km', '{}'::jsonb, true),
-  ('Stack Overflow Jobs — AWS', 'rss', 'https://stackoverflow.com/jobs/feed?q=aws&l=Remote&d=20&u=Km', '{}'::jsonb, true),
-  ('Otta — DevOps Jobs', 'otta', 'https://www.otta.com/jobs', '{"query": "devops", "location": "remote"}'::jsonb, true),
-  ('Otta — Cloud Engineer Jobs', 'otta', 'https://www.otta.com/jobs', '{"query": "cloud engineer", "location": "remote"}'::jsonb, true),
-  ('Glassdoor — DevOps Remote', 'glassdoor', 'https://www.glassdoor.com/Job/jobs.htm', '{"keyword": "devops", "location": "Remote"}'::jsonb, true),
-  ('Glassdoor — AWS Remote', 'glassdoor', 'https://www.glassdoor.com/Job/jobs.htm', '{"keyword": "aws", "location": "Remote"}'::jsonb, true),
-  -- LinkedIn Sources (Remote + Africa On-site)
+  -- LinkedIn Sources (Remote + Africa On-site) - Tested and Working
   ('LinkedIn — DevOps Remote Jobs', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer", "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Remote Jobs', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer", "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — AWS Instructor Remote Jobs', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "aws instructor trainer", "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
@@ -207,5 +209,7 @@ VALUES
   ('LinkedIn — DevOps Nairobi (On-site)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer", "location": "Nairobi, Kenya", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — SRE Johannesburg (On-site)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "site reliability engineer", "location": "Johannesburg, South Africa", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — DevOps Accra (On-site)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer", "location": "Accra, Ghana", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — Cloud Engineer Accra (On-site)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer", "location": "Accra, Ghana", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — IT Infrastructure Ghana (On-site)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "it infrastructure", "location": "Ghana", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Cairo (On-site)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer", "location": "Cairo, Egypt", "f_TPR": "r604800"}'::jsonb, true)
 ON CONFLICT DO NOTHING;
