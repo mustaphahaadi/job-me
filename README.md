@@ -15,7 +15,7 @@ scrape → enrich (AI spam filter) → match (5-signal score) → auto-apply (AI
 - Filters spam and confirms remote status using Gemini AI (free tier, optional)
 - Auto-applies to Greenhouse, Lever, and Workday roles above your score threshold
 - Generates a tailored AI cover letter per application
-- Dashboard to review, filter, dismiss, and manually apply to jobs
+- Dashboard to review, filter, dismiss, bulk-delete, and manually apply to jobs
 - Full applications history with method, CV used, and score
 
 ---
@@ -50,7 +50,9 @@ job-me/
 │       ├── connectors/              # rss, api, linkedin, indeed, glassdoor, otta, jobicy, arbeitnow
 │       ├── auto-apply-connectors/   # greenhouse, lever, workday
 │       └── pipeline/                # scrape → enrich → match → auto-apply
-├── supabase/migrations/             # 0001–0008 versioned SQL
+├── supabase/
+│   ├── config.toml                  # Supabase local dev config
+│   └── schema.sql                   # Single-file idempotent schema (tables + RLS + seed)
 └── .github/workflows/scrape.yml     # 6-hour cron pipeline
 ```
 
@@ -84,21 +86,9 @@ pnpm install
    - Project URL
    - Anon key
    - Service Role key
-3. Go to **SQL Editor** and run each migration file in order:
+3. Go to **SQL Editor**, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and click **Run**
 
-```
-supabase/migrations/0001_init.sql
-supabase/migrations/0002_rls.sql
-supabase/migrations/0003_schema_fixes.sql
-supabase/migrations/0004_fix_rls.sql
-supabase/migrations/0005_allow_anon_rls.sql
-supabase/migrations/0006_source_type_fix.sql
-supabase/migrations/0007_settings_auto_apply_cap.sql
-supabase/migrations/0008_cover_letter.sql
-```
-
-> Migration `0005` seeds 12 live job sources automatically.
-> Migration `0006` seeds LinkedIn, Indeed, Jobicy, and Arbeitnow sources and widens the source type constraint.
+   The schema is fully **idempotent** — safe to run on a fresh or existing database. It creates all tables, RLS policies, indexes, and seeds default job sources automatically.
 
 4. Go to **Storage → New bucket**, name it `cv-files`, set it to **Private**
 
@@ -123,7 +113,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 APPLICANT_FIRST_NAME=Jane
 APPLICANT_LAST_NAME=Doe
 APPLICANT_EMAIL=jane.doe@example.com
-APPLICANT_PHONE=+447123456789
+APPLICANT_PHONE=+447123456789   # optional
 CV_FILE_PATH=/path/to/your-cv.pdf
 
 # Optional — enables AI cover letter generation and spam filtering
@@ -138,6 +128,7 @@ GEMINI_API_KEY=
 pnpm dev          # Dashboard at http://localhost:5173
 pnpm pipeline     # Run the full scrape → enrich → match → auto-apply pipeline once
 pnpm typecheck    # TypeScript check across all packages
+pnpm test         # Run unit tests
 pnpm build        # Production build of the frontend
 ```
 
@@ -181,15 +172,15 @@ Vercel provisions SSL automatically.
 
 Go to your fork → **Settings → Secrets and variables → Actions → New repository secret**:
 
-| Secret | Description |
-|---|---|
-| `SUPABASE_URL` | `https://your-project-ref.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
-| `APPLICANT_FIRST_NAME` | Your first name |
-| `APPLICANT_LAST_NAME` | Your last name |
-| `APPLICANT_EMAIL` | Your email for job applications |
-| `APPLICANT_PHONE` | Your phone e.g. `+447123456789` |
-| `GEMINI_API_KEY` | Gemini API key (optional — enables AI features) |
+| Secret | Required | Description |
+|---|---|---|
+| `SUPABASE_URL` | ✅ | `https://your-project-ref.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key |
+| `APPLICANT_FIRST_NAME` | ✅ | Your first name |
+| `APPLICANT_LAST_NAME` | ✅ | Your last name |
+| `APPLICANT_EMAIL` | ✅ | Your email for job applications |
+| `APPLICANT_PHONE` | Optional | Your phone e.g. `+447123456789` |
+| `GEMINI_API_KEY` | Optional | Enables AI features (cover letters + spam filter) |
 
 The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button (requires `VITE_GITHUB_PAT`).
 
@@ -234,7 +225,7 @@ Without a key, the pipeline runs normally — AI steps are silently skipped.
 
 | Page | Route | Description |
 |---|---|---|
-| Dashboard | `/` | Job list with pipeline sidebar, filter bar, and detail drawer |
+| Dashboard | `/` | Job list with pipeline sidebar, filter bar, bulk-delete, and detail drawer |
 | Sources | `/sources` | Add/edit/toggle job board sources, trigger manual runs |
 | Applications | `/applications` | Full history of every auto and manual application |
 | CV | `/cv` | Upload CV versions, set defaults per role |
@@ -254,22 +245,22 @@ Every job is scored `0.00–1.00` across 5 signals:
 | Location | **10%** | Raw location vs your accepted locations list |
 | Recency decay | **5%** | Exponential decay — 14-day-old post scores ~37% |
 
-A negative keyword hit forces the score to `0.00` immediately.
+A negative keyword hit forces the score to `0.00` immediately and closes the job.
 
 ---
 
 ## Source connectors
 
-| Type | Connector | Notes |
-|---|---|---|
-| `rss` | Generic RSS/Atom | WeWorkRemotely, Remotive, NoDesk, HN Jobs, Dev.to |
-| `api` | Generic REST API | RemoteOK, Remotive API |
-| `arbeitnow` | Arbeitnow | Free EU/remote API, no key needed |
-| `jobicy` | Jobicy | Free remote API, no key needed |
-| `linkedin` | LinkedIn (Playwright) | Headless scraper, no login, first ~25 public results |
-| `indeed` | Indeed RSS | Public RSS feed |
-| `glassdoor` | Glassdoor RSS | Public RSS feed |
-| `otta` | Otta API | Free public API |
+| Type | Notes |
+|---|---|
+| `rss` | Generic RSS/Atom — WeWorkRemotely, Remotive, NoDesk, HN Jobs, Dev.to |
+| `api` | Generic REST API — RemoteOK, Remotive API |
+| `arbeitnow` | Free EU/remote API, no key needed |
+| `jobicy` | Free remote API, no key needed |
+| `linkedin` | Playwright headless scraper — no login, first ~25 public results |
+| `indeed` | Public RSS feed |
+| `glassdoor` | Public RSS feed |
+| `otta` | Free public API |
 
 ---
 
@@ -281,7 +272,7 @@ A negative keyword hit forces the score to `0.00` immediately.
 | Lever | `jobs.lever.co`, `lever.co/` |
 | Workday | `myworkdayjobs.com`, `wd3.myworkday.com`, `wd1.myworkday.com` |
 
-Jobs with no matching connector go to **Manual Queue** automatically.
+Jobs with no matching connector go to **Manual Queue** automatically. Only successful applications count toward the per-run rate cap.
 
 ---
 
@@ -346,7 +337,7 @@ From `/sources`, click **Add source**:
 | `VITE_GITHUB_REPO` | Optional | `username/repo` — required if PAT is set |
 | `VITE_GITHUB_BRANCH` | Optional | Branch to trigger workflow on (default: `main`) |
 
-### `packages/scraper/.env`
+### `packages/scraper/.env` / GitHub Actions secrets
 
 | Variable | Required | Description |
 |---|---|---|
@@ -355,9 +346,20 @@ From `/sources`, click **Add source**:
 | `APPLICANT_FIRST_NAME` | ✅ | Used in auto-apply form fields |
 | `APPLICANT_LAST_NAME` | ✅ | Used in auto-apply form fields |
 | `APPLICANT_EMAIL` | ✅ | Used in auto-apply form fields |
-| `APPLICANT_PHONE` | ✅ | Used in auto-apply form fields |
-| `CV_FILE_PATH` | ✅ | Local path to CV PDF for auto-apply file upload |
+| `APPLICANT_PHONE` | Optional | Used in auto-apply phone fields |
+| `CV_FILE_PATH` | ✅* | Local path to CV PDF — auto-set in CI from Supabase Storage |
 | `GEMINI_API_KEY` | Optional | Enables AI spam filtering and cover letter generation |
+
+> \* In GitHub Actions, `CV_FILE_PATH` is set automatically by the workflow — it downloads the most recently uploaded CV from Supabase Storage. You only need to set it manually for local pipeline runs.
+
+---
+
+## Contributing
+
+1. Fork the repo and create a feature branch
+2. Run `pnpm typecheck && pnpm test && pnpm build` before opening a PR — all three must pass
+3. Keep secrets out of committed code — use `.env.example` files as the reference
+4. Add a connector? Follow the `AutoApplyConnector` interface in `packages/scraper/src/auto-apply-connectors/base.ts`
 
 ---
 

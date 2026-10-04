@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 import { Upload, Star, Trash2 } from 'lucide-react';
 import type { CvVersion, Settings } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import styles from './CvVersions.module.css';
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 export default function CvVersions() {
   const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
