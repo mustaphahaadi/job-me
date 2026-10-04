@@ -90,9 +90,6 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [page, setPage] = useState(0);
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
 
   // ── Selection state ───────────────────────────────────────────
@@ -100,22 +97,17 @@ export default function Dashboard() {
   const [selectMode, setSelectMode] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const PAGE_SIZE = 200;
-
   // ── Initial load ──────────────────────────────────────────────
   useEffect(() => {
     void (async () => {
       setLoading(true);
       const [jobsRes, sourcesRes, cvRes, settingsRes] = await Promise.all([
-        supabase.from('jobs').select('*').order('scraped_at', { ascending: false }).range(0, PAGE_SIZE - 1),
+        supabase.from('jobs').select('*').order('scraped_at', { ascending: false }),
         supabase.from('sources').select('*').order('name'),
         supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false }),
         supabase.from('settings').select('days_posted_default').eq('id', 1).single(),
       ]);
-      if (jobsRes.data) {
-        setJobs(jobsRes.data as Job[]);
-        setHasMore(jobsRes.data.length === PAGE_SIZE);
-      }
+      if (jobsRes.data) setJobs(jobsRes.data as Job[]);
       if (sourcesRes.data) {
         setSources(sourcesRes.data as Source[]);
         const times = (sourcesRes.data as Source[]).map(s => s.last_scraped_at).filter(Boolean) as string[];
@@ -129,22 +121,6 @@ export default function Dashboard() {
       setLoading(false);
     })();
   }, []);
-
-  const handleLoadMore = useCallback(async () => {
-    setLoadingMore(true);
-    const nextPage = page + 1;
-    const from = nextPage * PAGE_SIZE;
-    const { data } = await supabase
-      .from('jobs').select('*')
-      .order('scraped_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-    if (data) {
-      setJobs(prev => [...prev, ...data as Job[]]);
-      setHasMore(data.length === PAGE_SIZE);
-      setPage(nextPage);
-    }
-    setLoadingMore(false);
-  }, [page]);
 
   // ── Realtime ──────────────────────────────────────────────────
   useEffect(() => {
@@ -471,11 +447,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
-              {hasMore && (
-                <button className={styles.loadMoreBtn} onClick={handleLoadMore} disabled={loadingMore}>
-                  {loadingMore ? 'Loading…' : 'Load more jobs'}
-                </button>
-              )}
+
             </>
           )}
         </div>
