@@ -162,18 +162,37 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
 
   // ── Location ──────────────────────────────────────────────────────────────
   const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'fully remote', '100% remote', 'work from home', 'wfh'];
+  const GHANA_KEYWORDS  = ['ghana', 'accra', 'kumasi', 'tema', 'takoradi'];
+
   const isRemote = REMOTE_KEYWORDS.some(k => locationLower.includes(k));
-  
-  // Remote jobs always get full location score (priority)
-  // On-site jobs get full score only if location matches accepted_locations
-  const locationAccepted =
-    isRemote ||
-    acceptedLocations.length === 0 ||
-    acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase())) ||
-    locationLower === '';
-  
-  // Give remote jobs a slight boost (1.0) vs on-site (0.9 if accepted, 0.0 if not)
-  const locationScore = isRemote ? 1.0 : (locationAccepted ? 0.9 : 0.0);
+  const isGhana  = GHANA_KEYWORDS.some(k => locationLower.includes(k));
+
+  let locationAccepted = false;
+  let locationScore = 0.0;
+
+  if (isGhana) {
+    // Top priority: Ghana jobs (both on-site and remote) get full 1.0 score
+    locationAccepted = true;
+    locationScore = 1.0;
+  } else if (isRemote) {
+    // Remote jobs for Africa/worldwide get 0.95
+    locationAccepted = true;
+    locationScore = 0.95;
+  } else if (locationLower === '') {
+    // Unspecified location — allow but score neutral
+    locationAccepted = true;
+    locationScore = 0.5;
+  } else {
+    // On-site outside Ghana — rejected per requirement (remote only unless Ghana)
+    const matchesAccepted = acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase()));
+    if (matchesAccepted) {
+      locationAccepted = true;
+      locationScore = 0.8;
+    } else {
+      locationAccepted = false;
+      locationScore = 0.0;
+    }
+  }
 
   // ── Recency ───────────────────────────────────────────────────────────────
   const recency = recencyScore(job.posted_date);

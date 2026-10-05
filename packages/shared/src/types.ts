@@ -22,7 +22,7 @@ export const JOB_STATUSES: JobStatus[] = [
 export interface Source {
   id: string;
   name: string;
-  type: 'api' | 'rss' | 'arbeitnow' | 'jobicy' | 'linkedin' | 'indeed' | 'glassdoor' | 'otta';
+  type: 'api' | 'rss' | 'arbeitnow' | 'jobicy' | 'linkedin' | 'indeed' | 'glassdoor' | 'otta' | 'generic_web';
   base_url: string;
   query_params: Record<string, unknown>;
   active: boolean;

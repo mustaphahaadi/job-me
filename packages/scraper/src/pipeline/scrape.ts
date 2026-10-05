@@ -8,6 +8,7 @@ import { LinkedInConnector } from '../connectors/linkedin.js';
 import { IndeedConnector } from '../connectors/indeed.js';
 import { OttaConnector } from '../connectors/otta.js';
 import { GlassdoorConnector } from '../connectors/glassdoor.js';
+import { GenericWebConnector } from '../connectors/generic-web.js';
 import { sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
@@ -155,6 +156,7 @@ function getConnector(source: Source): Connector {
   if (source.type === 'indeed') return new IndeedConnector();
   if (source.type === 'otta') return new OttaConnector();
   if (source.type === 'glassdoor') return new GlassdoorConnector();
+  if (source.type === 'generic_web') return new GenericWebConnector();
   throw new Error(`Unknown source type: ${source.type}`);
 }
 

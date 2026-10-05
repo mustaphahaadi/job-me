@@ -41,4 +41,20 @@ describe('scoreJob', () => {
     expect(result.breakdown.negative_keyword_hit).toBe(true);
     expect(result.breakdown.negative_keywords_found).toContain('php');
   });
+
+  it('scores Ghana on-site and remote jobs with highest priority (1.0 location score)', () => {
+    const ghanaJob: NormalizedJob = {
+      ...baseJob,
+      title: 'DevOps Engineer',
+      raw_location: 'Accra, Ghana',
+    };
+
+    const result = scoreJob(ghanaJob, {
+      targetRoles: ['DevOps Engineer'],
+      acceptedLocations: ['Ghana', 'Accra'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(true);
+    expect(result.breakdown.location.score).toBe(1.0);
+  });
 });

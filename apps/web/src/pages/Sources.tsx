@@ -266,12 +266,13 @@ export default function Sources() {
                   onChange={e => setForm(f => ({ ...f, type: e.target.value as Source['type'] }))}>
                   <option value="rss">RSS</option>
                   <option value="api">API (Generic)</option>
+                  <option value="generic_web">Generic Web Page (Playwright)</option>
                   <option value="jobicy">Jobicy</option>
                   <option value="arbeitnow">Arbeitnow</option>
                   <option value="linkedin">LinkedIn</option>
-                  <option value="indeed">Indeed</option>
+                  <option value="indeed">Indeed (Playwright)</option>
                   <option value="otta">Otta</option>
-                  <option value="glassdoor">Glassdoor (RSS)</option>
+                  <option value="glassdoor">Glassdoor (Playwright)</option>
                 </select>
               </div>
               <div className={styles.field}>

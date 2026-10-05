@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS sources (
 -- Enforce allowed connector types (idempotent: drops and re-adds)
 ALTER TABLE sources DROP CONSTRAINT IF EXISTS sources_type_check;
 ALTER TABLE sources ADD CONSTRAINT sources_type_check
-  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta'));
+  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta', 'generic_web'));
 
 -- Backfill column for databases that pre-date migration 0003
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS consecutive_fail_count int NOT NULL DEFAULT 0;
