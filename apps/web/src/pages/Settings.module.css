@@ -250,6 +250,62 @@
   text-align: right;
 }
 
+/* ── Danger section (Clear Database) ──────────────────────────*/
+.dangerSection {
+  padding: var(--space-6) 0;
+  border-top: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+
+.dangerSectionTitle {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--danger);
+  margin-bottom: 4px;
+}
+
+.clearDbRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.clearDbBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: 8px var(--space-4);
+  cursor: pointer;
+  transition: all var(--duration-base) ease;
+}
+
+.clearDbBtn:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+
+.clearDbBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.clearDbSuccess {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-sm);
+  color: var(--success);
+  font-weight: 500;
+}
+
 /* ── Save ─────────────────────────────────────────────────────*/
 .saveRow {
   padding: var(--space-6) 0 0;

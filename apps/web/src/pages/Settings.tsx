@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Trash2, Check } from 'lucide-react';
 import type { Settings } from '@job-me/shared';
 import { DEFAULT_SKILL_VOCABULARY } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
@@ -33,10 +34,57 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Clear database state
+  const [clearingDb, setClearingDb] = useState(false);
+  const [clearDbSuccess, setClearDbSuccess] = useState(false);
+  const [clearDbError, setClearDbError] = useState<string | null>(null);
+
   useEffect(() => {
     void supabase.from('settings').select('*').eq('id', 1).single()
       .then(({ data }) => { if (data) setSettings(data as Settings); });
   }, []);
+
+  async function handleClearDatabase() {
+    if (!confirm('Are you sure you want to clear the entire job database? This will permanently delete all scraped jobs and application history so you can start a fresh scrape run.')) {
+      return;
+    }
+
+    setClearingDb(true);
+    setClearDbError(null);
+    setClearDbSuccess(false);
+
+    try {
+      // 1. Delete all applications
+      const { error: appErr } = await supabase
+        .from('applications')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (appErr) throw new Error(`Failed to delete applications: ${appErr.message}`);
+
+      // 2. Delete all jobs
+      const { error: jobErr } = await supabase
+        .from('jobs')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (jobErr) throw new Error(`Failed to delete jobs: ${jobErr.message}`);
+
+      // 3. Reset failure counters on sources
+      await supabase
+        .from('sources')
+        .update({ consecutive_fail_count: 0, last_scrape_error: null })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      setClearDbSuccess(true);
+      setTimeout(() => setClearDbSuccess(false), 4000);
+    } catch (err) {
+      console.error('[handleClearDatabase]', err);
+      setClearDbError(err instanceof Error ? err.message : 'Failed to clear database.');
+    } finally {
+      setClearingDb(false);
+    }
+  }
 
   function addRole() {
     const trimmed = newRole.trim();
@@ -302,6 +350,38 @@ export default function SettingsPage() {
               onChange={e => setSettings(s => ({ ...s, max_auto_apply_per_run: Number(e.target.value) }))}
               style={{ width: 80 }} />
             <span className={styles.sliderUnit}>per run</span>
+          </div>
+        </section>
+
+        <hr className={styles.divider} />
+
+        {/* ── Clear Database Section ─────────────────────────────── */}
+        <section className={styles.dangerSection} id="settings-clear-database">
+          <h2 className={styles.dangerSectionTitle}>Database Management</h2>
+          <p className={styles.sectionDesc}>
+            Permanently clear all scraped jobs and application history from the database.
+            Use this when you want to reset your database and perform a completely fresh scraping run.
+          </p>
+          <div className={styles.clearDbRow}>
+            <button
+              type="button"
+              id="settings-clear-database-btn"
+              className={styles.clearDbBtn}
+              onClick={handleClearDatabase}
+              disabled={clearingDb}
+              title="Clear all scraped jobs and application records from Supabase"
+            >
+              <Trash2 size={14} />
+              {clearingDb ? 'Clearing database…' : 'Clear database'}
+            </button>
+
+            {clearDbSuccess && (
+              <span className={styles.clearDbSuccess}>
+                <Check size={14} /> Database cleared successfully!
+              </span>
+            )}
+
+            {clearDbError && <span className={styles.saveError}>{clearDbError}</span>}
           </div>
         </section>
 
