@@ -162,10 +162,11 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
 
   // ── Location ──────────────────────────────────────────────────────────────
   const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'fully remote', '100% remote', 'work from home', 'wfh'];
-  const GHANA_KEYWORDS  = ['ghana', 'accra', 'kumasi', 'tema', 'takoradi'];
+  const GHANA_KEYWORDS  = ['ghana', 'accra', 'kumasi', 'tema', 'takoradi', 'sekondi', 'cape coast', 'tamale'];
 
-  const isRemote = REMOTE_KEYWORDS.some(k => locationLower.includes(k));
-  const isGhana  = GHANA_KEYWORDS.some(k => locationLower.includes(k));
+  const fullTextLower = `${titleLower} ${descLower} ${locationLower}`;
+  const isGhana  = GHANA_KEYWORDS.some(k => fullTextLower.includes(k));
+  const isRemote = REMOTE_KEYWORDS.some(k => fullTextLower.includes(k));
 
   let locationAccepted = false;
   let locationScore = 0.0;
@@ -178,13 +179,16 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     // Remote jobs for Africa/worldwide get 0.95
     locationAccepted = true;
     locationScore = 0.95;
-  } else if (locationLower === '') {
-    // Unspecified location — allow but score neutral
+  } else if (locationLower.trim() === '') {
+    // Unspecified location — neutral score (0.5), accepted
     locationAccepted = true;
     locationScore = 0.5;
   } else {
     // On-site outside Ghana — rejected per requirement (remote only unless Ghana)
-    const matchesAccepted = acceptedLocations.some(loc => locationLower.includes(loc.toLowerCase()));
+    const matchesAccepted = acceptedLocations.some(loc => {
+      const l = loc.toLowerCase();
+      return l !== 'remote' && l !== 'worldwide' && l !== 'anywhere' && l !== 'global' && locationLower.includes(l);
+    });
     if (matchesAccepted) {
       locationAccepted = true;
       locationScore = 0.8;
@@ -206,8 +210,12 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     locationScore  * WEIGHTS.location      +
     recency        * WEIGHTS.recency;
 
-  // Only hard-zero if BOTH title AND skills are completely empty — avoids
-  // discarding jobs where the title is phrased differently but skills match well.
+  // Reject job if location is not accepted (e.g. foreign on-site jobs)
+  if (!locationAccepted) {
+    blended = 0;
+  }
+
+  // Only hard-zero if BOTH title AND skills are completely empty
   if (titleScore === 0 && skillsScore === 0) {
     blended = 0;
   }

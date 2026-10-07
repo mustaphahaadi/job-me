@@ -57,4 +57,38 @@ describe('scoreJob', () => {
     expect(result.breakdown.location.accepted).toBe(true);
     expect(result.breakdown.location.score).toBe(1.0);
   });
+
+  it('rejects foreign on-site jobs (score = 0 and location.accepted = false)', () => {
+    const foreignOnsiteJob: NormalizedJob = {
+      ...baseJob,
+      title: 'DevOps Engineer',
+      raw_location: 'London, United Kingdom',
+      description: 'Onsite position in central London office.',
+    };
+
+    const result = scoreJob(foreignOnsiteJob, {
+      targetRoles: ['DevOps Engineer'],
+      acceptedLocations: ['Ghana', 'remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('accepts foreign remote jobs (location.accepted = true and high score)', () => {
+    const foreignRemoteJob: NormalizedJob = {
+      ...baseJob,
+      title: 'DevOps Engineer (Remote)',
+      raw_location: 'London, United Kingdom',
+      description: 'Fully remote position for candidates worldwide with AWS, Terraform, and Kubernetes experience.',
+    };
+
+    const result = scoreJob(foreignRemoteJob, {
+      targetRoles: ['DevOps Engineer'],
+      acceptedLocations: ['Ghana', 'remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(true);
+    expect(result.score).toBeGreaterThan(0.40);
+  });
 });

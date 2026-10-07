@@ -38,8 +38,8 @@ export async function runEnrich(supabase: SupabaseClient): Promise<void> {
   let spamClosed = 0;
 
   for (const job of jobs as Pick<Job, 'id' | 'title' | 'description' | 'raw_location'>[]) {
-    // Rate limit: ~4 req/sec to stay under 15/min
-    await new Promise(r => setTimeout(r, 250));
+    // Rate limit: 1 request every 4 seconds (4000ms) to stay strictly within Gemini free tier limit (15 req/min)
+    await new Promise(r => setTimeout(r, 4000));
 
     const result = await enrichJobDescription({
       title: job.title,

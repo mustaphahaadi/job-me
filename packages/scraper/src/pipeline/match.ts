@@ -41,13 +41,14 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
 
     const { score, breakdown } = scoreJob(normalized, scoringOptions);
 
-    // Use the same threshold as auto-apply — settings is the single source of truth
-    const threshold = settings.auto_apply_score_threshold ?? 0.75;
-    const newStatus = score >= threshold ? 'matched' : 'new';
-    if (newStatus === 'matched') matched++;
+    // Matching score threshold: jobs scoring >= 0.40 with accepted location move to 'matched'
+    const MATCH_THRESHOLD = 0.40;
+    const isMatched = score >= MATCH_THRESHOLD && breakdown.location.accepted;
+    const newStatus = isMatched ? 'matched' : 'new';
+    if (isMatched) matched++;
 
-    // Clamp to 'closed' if negative keyword hit
-    const finalStatus = breakdown.negative_keyword_hit ? 'closed' : newStatus;
+    // Clamp to 'closed' if negative keyword hit OR location is not accepted (e.g. foreign on-site)
+    const finalStatus = (breakdown.negative_keyword_hit || !breakdown.location.accepted) ? 'closed' : newStatus;
 
     await supabase.from('jobs').update({
       match_score: score,

@@ -242,7 +242,7 @@ Every job is scored `0.00–1.00` across 5 signals:
 | Title match | **40%** | Fuzzy match against your target roles |
 | Skills overlap | **30%** | Keyword match against your skill vocabulary in the description |
 | Seniority | **15%** | Detected level vs target; adjacent levels get partial credit |
-| Location | **10%** | Raw location vs your accepted locations list |
+| Location | **10%** | Top priority (1.0) for Ghana (on-site & remote); 0.95 for remote roles globally/Africa; on-site non-Ghana roles filtered out (0.0) |
 | Recency decay | **5%** | Exponential decay — 14-day-old post scores ~37% |
 
 A negative keyword hit forces the score to `0.00` immediately and closes the job.
@@ -255,11 +255,12 @@ A negative keyword hit forces the score to `0.00` immediately and closes the job
 |---|---|
 | `rss` | Generic RSS/Atom — WeWorkRemotely, Remotive, NoDesk, HN Jobs, Dev.to |
 | `api` | Generic REST API — RemoteOK, Remotive API |
+| `generic_web` | Playwright headless scraper — auto-detects job cards/links on any public career/board page |
 | `arbeitnow` | Free EU/remote API, no key needed |
 | `jobicy` | Free remote API, no key needed |
 | `linkedin` | Playwright headless scraper — no login, first ~25 public results |
-| `indeed` | Public RSS feed |
-| `glassdoor` | Public RSS feed |
+| `indeed` | Playwright headless scraper |
+| `glassdoor` | Playwright headless scraper |
 | `otta` | Free public API |
 
 ---
@@ -287,11 +288,20 @@ From `/sources`, click **Add source**:
 
 ### Example configs
 
-**Indeed RSS — DevOps Remote**
+**Generic Web Page (Playwright) — Public Careers Page**
+```json
+{
+  "type": "generic_web",
+  "base_url": "https://remotive.com/remote-devops-jobs",
+  "query_params": {}
+}
+```
+
+**Indeed Playwright — DevOps Remote**
 ```json
 {
   "type": "indeed",
-  "base_url": "https://www.indeed.com/rss",
+  "base_url": "https://www.indeed.com/jobs",
   "query_params": { "q": "devops engineer", "l": "Remote", "sort": "date", "fromage": "7" }
 }
 ```
