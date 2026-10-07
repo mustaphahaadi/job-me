@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import type { SupabaseClient, Job, CvVersion } from '@job-me/shared';
 import { getOrInitSettings, selectCvForTitle, generateCoverLetter } from '@job-me/shared';
 import { sanitizeLog } from '../connectors/utils.js';
@@ -32,15 +35,35 @@ function findConnector(jobUrl: string): AutoApplyConnector | null {
 export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
   const settings = await getOrInitSettings(supabase);
 
-  // Guard: auto-apply requires a CV path. Skip entire step if missing.
-  const CV_PATH = process.env['CV_FILE_PATH'];
-  if (!CV_PATH) {
-    console.log('[auto-apply] CV_FILE_PATH not set — skipping auto-apply step.');
-    return;
+  const { data: cvVersions } = await supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false });
+  const cvs = (cvVersions ?? []) as CvVersion[];
+
+  let cvPath = process.env['CV_FILE_PATH'];
+
+  // Fallback: If CV_FILE_PATH is not set in env, download the uploaded CV from Supabase Storage
+  if (!cvPath && cvs.length > 0 && cvs[0]?.file_path) {
+    try {
+      const defaultCv = cvs[0]!;
+      console.log(`[auto-apply] CV_FILE_PATH not set in env — downloading uploaded CV "${defaultCv.label}" from Supabase Storage...`);
+      const { data: blob, error: dlErr } = await supabase.storage.from('cv-files').download(defaultCv.file_path);
+      if (blob && !dlErr) {
+        const tmpPath = path.join(os.tmpdir(), `cv-${defaultCv.id}.pdf`);
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        fs.writeFileSync(tmpPath, buffer);
+        cvPath = tmpPath;
+        process.env['CV_FILE_PATH'] = tmpPath;
+        console.log(`[auto-apply] Successfully downloaded CV to temporary path ${tmpPath}`);
+      }
+    } catch (dlException) {
+      console.warn('[auto-apply] Could not download CV from Supabase Storage:', dlException);
+    }
   }
 
-  const { data: cvVersions } = await supabase.from('cv_versions').select('*');
-  const cvs = (cvVersions ?? []) as CvVersion[];
+  // Guard: auto-apply requires a CV path. Skip step if missing.
+  if (!cvPath) {
+    console.log('[auto-apply] No CV file available (set CV_FILE_PATH in env or upload a CV on the /cv page) — skipping auto-apply step.');
+    return;
+  }
 
   // Use settings threshold (auto_apply_score_threshold) as the eligibility filter
   const scoreThreshold = settings.auto_apply_score_threshold ?? 0.75;
