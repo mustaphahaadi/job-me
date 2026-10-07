@@ -73,7 +73,7 @@ export class LinkedInConnector implements Connector {
       const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'work from home', 'wfh'];
 
       return jobs.map(j => {
-        const rawLoc = j.location ?? extractLocationFromText(j.title) ?? params['location'] ?? null;
+        const rawLoc = j.location ?? extractLocationFromText(j.title) ?? null;
         return {
           title: j.title,
           company: j.company,
@@ -87,12 +87,13 @@ export class LinkedInConnector implements Connector {
         if (!j.url) return false;
         const locLower = (j.raw_location ?? '').toLowerCase();
         const titleLower = j.title.toLowerCase();
-        const combined = `${locLower} ${titleLower} ${params['location'] ?? ''}`.toLowerCase();
+        // Evaluate ONLY the job card location and title — do NOT include params['location']
+        const combined = `${locLower} ${titleLower}`.toLowerCase();
         const isGhana = GHANA_KEYWORDS.some(k => combined.includes(k));
         const isRemote = REMOTE_KEYWORDS.some(k => combined.includes(k));
         // Keep if Ghana (on-site & remote) OR if explicitly remote anywhere else
         if (isGhana || isRemote) return true;
-        // Reject foreign on-site jobs
+        // Reject foreign on-site jobs (e.g. Madrid Spain, Melbourne Australia, Bristol UK)
         return false;
       });
 
