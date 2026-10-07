@@ -13,15 +13,15 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
   // optionsFromSettings maps all settings fields automatically
   const scoringOptions = optionsFromSettings(settings);
 
-  // Fetch all 'new' jobs
+  // Fetch all 'new', 'matched', and 'manual_queue' jobs to score and rescore against latest location rules
   const { data: jobs, error } = await supabase
     .from('jobs')
     .select('*')
-    .eq('status', 'new');
+    .in('status', ['new', 'matched', 'manual_queue']);
 
-  if (error) throw new Error(`[match] Failed to fetch new jobs: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
+  if (error) throw new Error(`[match] Failed to fetch jobs for scoring: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
   if (!jobs || jobs.length === 0) {
-    console.log('[match] No new jobs to score.');
+    console.log('[match] No jobs to score.');
     return;
   }
 

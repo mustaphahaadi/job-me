@@ -69,15 +69,32 @@ export class LinkedInConnector implements Connector {
         }).filter(j => j.title && j.url);
       });
 
-      return jobs.map(j => ({
-        title: j.title,
-        company: j.company,
-        url: j.url.split('?')[0] ?? j.url, // strip tracking params
-        posted_date: j.postedDate ? toIsoDate(j.postedDate) : null,
-        description: null, // description requires clicking into each job — too slow for bulk scrape
-        raw_location: j.location ?? extractLocationFromText(j.title) ?? params['location'] ?? null,
-        raw_tags: [],
-      })).filter(j => j.url);
+      const GHANA_KEYWORDS  = ['ghana', 'accra', 'kumasi', 'tema', 'takoradi', 'sekondi', 'cape coast', 'tamale'];
+      const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'work from home', 'wfh'];
+
+      return jobs.map(j => {
+        const rawLoc = j.location ?? extractLocationFromText(j.title) ?? params['location'] ?? null;
+        return {
+          title: j.title,
+          company: j.company,
+          url: j.url.split('?')[0] ?? j.url, // strip tracking params
+          posted_date: j.postedDate ? toIsoDate(j.postedDate) : null,
+          description: null, // description requires clicking into each job — too slow for bulk scrape
+          raw_location: rawLoc,
+          raw_tags: [],
+        };
+      }).filter(j => {
+        if (!j.url) return false;
+        const locLower = (j.raw_location ?? '').toLowerCase();
+        const titleLower = j.title.toLowerCase();
+        const combined = `${locLower} ${titleLower} ${params['location'] ?? ''}`.toLowerCase();
+        const isGhana = GHANA_KEYWORDS.some(k => combined.includes(k));
+        const isRemote = REMOTE_KEYWORDS.some(k => combined.includes(k));
+        // Keep if Ghana (on-site & remote) OR if explicitly remote anywhere else
+        if (isGhana || isRemote) return true;
+        // Reject foreign on-site jobs
+        return false;
+      });
 
     } finally {
       await browser.close();
