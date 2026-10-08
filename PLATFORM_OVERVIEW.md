@@ -182,7 +182,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 - Consecutive fail count alert banner (triggers at ≥ 3 failures)
 - Per-source inline error message with last error text
 - Add/edit source form (modal) with JSON query params textarea
-- Per-source "Run now" button and global "Run all sources" button — both call the `trigger-pipeline` edge function, which dispatches `workflow_dispatch` server-side (GitHub PAT stays in function secrets, never in the frontend bundle)
+- Per-source "Run now" button and global "Run all sources" button — both dispatch `workflow_dispatch` via the GitHub API using `VITE_GITHUB_PAT` (optional `trigger-pipeline` edge function keeps the PAT server-side instead)
 - Active/inactive toggle per source (optimistic, with rollback and error feedback on failure)
 
 **CV Versions (`/cv`)**
@@ -216,7 +216,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 
 ### 7. GitHub Actions Workflow (`.github/workflows/scrape.yml`)
 
-- Triggers: `schedule` (every 6 hours) + `workflow_dispatch` (manual, via the `trigger-pipeline` edge function)
+- Triggers: `schedule` (every 6 hours) + `workflow_dispatch` (manual, via the GitHub API using `VITE_GITHUB_PAT`; the `trigger-pipeline` edge function is an optional server-side alternative)
 - Optionally downloads the newest CV from Supabase Storage into `/tmp/resume.pdf` as a fallback (never fails the run)
 - Installs Playwright Chromium with system deps for auto-apply
 - Runs `pnpm pipeline` with all secrets injected as environment variables
@@ -246,7 +246,7 @@ The following issues from the original review have been addressed:
 - **Design-token drift** — `tokens.css` palette uses the exact spec §2 hexes, radius 6/4px, no drop shadows (1px `--border` + raised surface instead); six `color: #fff` rules now use `var(--text)`.
 - **Scoring false positives** — whole-word matching for skills/seniority/negative keywords; no generic title aliases; irrelevant titles score 0; empty accepted-locations list accepts every location.
 - **Enrichment stacking** — the enrich step no longer rewrites the job description (summaries used to stack on every run and inflate the skills signal).
-- **PAT in frontend** — the GitHub PAT moved to the `trigger-pipeline` edge function secrets.
+- **PAT in frontend** — the GitHub PAT originally lived in the frontend bundle; it was moved to a `trigger-pipeline` edge function, then returned to the API-based trigger at the owner's request (users are non-technical). The edge function remains in the repo as an optional server-side alternative — README documents both.
 - **Match-status flapping** — only `new` jobs can be promoted to `matched`; `manual_queue` jobs are never auto-promoted.
 
 ### Still open
@@ -282,7 +282,7 @@ Policies grant both `anon` and `authenticated` roles — anyone holding the anon
 | Auto-apply pipeline stage | Complete |
 | Greenhouse / Lever / Workday ATS connectors | Complete |
 | GitHub Actions workflow | Complete |
-| `trigger-pipeline` edge function | Complete |
+| `trigger-pipeline` edge function | Optional alternative (API/PAT trigger is the default) |
 | Dashboard + realtime + pagination | Complete |
 | Job detail drawer + breakdown | Complete |
 | Sources management page | Complete |

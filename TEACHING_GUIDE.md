@@ -98,11 +98,12 @@ Create two environment files in your workspace:
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-```
 
-> The "Run now" button needs no frontend credentials — it calls the
-> `trigger-pipeline` edge function, which holds the GitHub PAT as a
-> server-side secret (see the README, "Step 2.1").
+# Required for the "Run now" button on /sources page
+VITE_GITHUB_PAT=github_pat_xxxxxx
+VITE_GITHUB_REPO=YOUR_USERNAME/job-me
+VITE_GITHUB_BRANCH=main
+```
 
 ### 2. Scraper Environment File: `packages/scraper/.env`
 ```env

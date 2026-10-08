@@ -98,6 +98,12 @@ job-me/
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+
+# Required for the "Run now" button on /sources — GitHub PAT with
+# repo + workflow scope (or fine-grained with Actions: Read and write)
+VITE_GITHUB_PAT=github_pat_xxxxxx
+VITE_GITHUB_REPO=YOUR_USERNAME/job-me
+VITE_GITHUB_BRANCH=main
 ```
 
 **`packages/scraper/.env`**
@@ -150,6 +156,9 @@ pnpm build        # Production build of the frontend
 |---|---|
 | `VITE_SUPABASE_URL` | `https://your-project-ref.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
+| `VITE_GITHUB_PAT` | GitHub PAT with `repo` + `workflow` scopes — enables the "Run now" button |
+| `VITE_GITHUB_REPO` | `YOUR_USERNAME/job-me` |
+| `VITE_GITHUB_BRANCH` | `main` (optional) |
 
 4. Click **Deploy**
 
@@ -174,20 +183,14 @@ Go to your fork → **Settings → Secrets and variables → Actions → New rep
 | `APPLICANT_PHONE` | Optional | Your phone e.g. `+447123456789` |
 | `GEMINI_API_KEY` | Optional | Enables AI features (cover letters + spam filter) |
 
-The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button (requires the `trigger-pipeline` edge function — see next step).
+The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button — it dispatches `workflow_dispatch` via the GitHub API using `VITE_GITHUB_PAT`.
 
-### Step 2.1 — Deploy the `trigger-pipeline` edge function
-
-The **Run now** button dispatches the workflow through a Supabase Edge Function, so the GitHub PAT never touches the frontend bundle:
-
-```bash
-supabase functions deploy trigger-pipeline --no-verify-jwt
-supabase secrets set GH_TOKEN=github_pat_xxxxxx GITHUB_REPO=YOUR_USERNAME/job-me GITHUB_BRANCH=main
-```
-
-- `GH_TOKEN` — fine-grained PAT with **Actions: Read and write** on the repo (a classic PAT with `repo` + `workflow` scopes also works)
-- `GITHUB_REPO` — `owner/repo`
-- `GITHUB_BRANCH` — optional, defaults to `main`
+> **More secure alternative (optional, technical setups):** the `trigger-pipeline` Supabase Edge Function keeps the PAT server-side instead of the frontend bundle:
+> ```bash
+> supabase functions deploy trigger-pipeline --no-verify-jwt
+> supabase secrets set GH_TOKEN=github_pat_xxxxxx GITHUB_REPO=YOUR_USERNAME/job-me GITHUB_BRANCH=main
+> ```
+> The button works with either mechanism — both write the same `workflow_dispatch` event.
 
 ### Step 3 — Upload your CV
 
@@ -372,6 +375,9 @@ This works for **all 9 source types** — including generic web pages, where the
 |---|---|---|
 | `VITE_SUPABASE_URL` | ✅ | Your Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase anon key (safe to expose in frontend) |
+| `VITE_GITHUB_PAT` | Optional | GitHub PAT with `repo` + `workflow` scopes — enables the "Run now" button |
+| `VITE_GITHUB_REPO` | Optional | `username/repo` — required if PAT is set |
+| `VITE_GITHUB_BRANCH` | Optional | Branch to trigger workflow on (default: `main`) |
 
 ### `packages/scraper/.env` / GitHub Actions secrets
 

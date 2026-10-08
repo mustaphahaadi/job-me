@@ -127,11 +127,11 @@ export default function Sources() {
   async function handleRunAll() {
     setTriggeringId('all');
     try {
-      await triggerScrapeNow();
-      alert('Triggered pipeline scrape run for all active sources via GitHub Actions.');
+      const ok = await triggerScrapeNow();
+      if (ok) alert('Triggered pipeline scrape run for all active sources via GitHub Actions.');
     } catch (err) {
       console.error('[handleRunAll] failed:', err);
-      alert('Failed to trigger scrape run. Check the trigger-pipeline edge function (see README).');
+      alert('Failed to trigger scrape run. Check the VITE_GITHUB_PAT setting.');
     } finally {
       setTriggeringId(null);
     }
