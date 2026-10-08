@@ -303,6 +303,13 @@
   letter-spacing: 0.06em;
 }
 
+.fieldHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
 .input, .select, .textarea {
   background: var(--bg);
   border: 1px solid var(--border);

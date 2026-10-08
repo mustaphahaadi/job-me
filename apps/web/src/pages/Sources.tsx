@@ -257,33 +257,74 @@ export default function Sources() {
               )}
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="src-name">Name</label>
-                <input id="src-name" className={styles.input} required value={form.name}
+                <input id="src-name" className={styles.input} required placeholder="e.g. Work at a Startup, Jobicy DevOps" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="src-type">Type</label>
                 <select id="src-type" className={styles.select} value={form.type}
-                  onChange={e => setForm(f => ({ ...f, type: e.target.value as Source['type'] }))}>
-                  <option value="rss">RSS</option>
-                  <option value="api">API (Generic)</option>
-                  <option value="generic_web">Generic Web Page (Playwright)</option>
-                  <option value="jobicy">Jobicy</option>
-                  <option value="arbeitnow">Arbeitnow</option>
-                  <option value="linkedin">LinkedIn</option>
-                  <option value="indeed">Indeed (Playwright)</option>
-                  <option value="otta">Otta</option>
-                  <option value="glassdoor">Glassdoor (Playwright)</option>
+                  onChange={e => {
+                    const newType = e.target.value as Source['type'];
+                    setForm(f => ({ ...f, type: newType }));
+                    // Auto-fill default base_url for common APIs if empty
+                    if (!form.base_url) {
+                      if (newType === 'jobicy') setForm(f => ({ ...f, base_url: 'https://jobicy.com/api/v2/remote-jobs' }));
+                      else if (newType === 'arbeitnow') setForm(f => ({ ...f, base_url: 'https://www.arbeitnow.com/api/job-board-api' }));
+                      else if (newType === 'linkedin') setForm(f => ({ ...f, base_url: 'https://www.linkedin.com/jobs/search' }));
+                    }
+                  }}>
+                  <option value="generic_web">Generic Web Page / Careers Page (Playwright)</option>
+                  <option value="rss">RSS / Atom Feed</option>
+                  <option value="jobicy">Jobicy API</option>
+                  <option value="arbeitnow">Arbeitnow API</option>
+                  <option value="linkedin">LinkedIn Scraper</option>
+                  <option value="indeed">Indeed Scraper</option>
+                  <option value="api">Generic REST API</option>
+                  <option value="otta">Otta API</option>
+                  <option value="glassdoor">Glassdoor Scraper</option>
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="src-url">Base URL</label>
-                <input id="src-url" className={styles.input} required type="url" value={form.base_url}
+                <label className={styles.fieldLabel} htmlFor="src-url">Website or Feed URL</label>
+                <input id="src-url" className={styles.input} required type="url" placeholder="https://www.workatastartup.com/jobs" value={form.base_url}
                   onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))} />
+                <span className={styles.fieldHint}>
+                  {form.type === 'generic_web'
+                    ? 'Paste any public career or job board URL (e.g. https://www.workatastartup.com/jobs).'
+                    : 'The direct website or API endpoint URL.'}
+                </span>
               </div>
+              
               <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="src-params">Query params (JSON)</label>
-                <textarea id="src-params" className={styles.textarea} value={paramStr}
-                  onChange={e => setParamStr(e.target.value)} rows={4} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className={styles.fieldLabel} htmlFor="src-params">
+                    Query Parameters / Keywords
+                  </label>
+                  <button
+                    type="button"
+                    style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '11px', cursor: 'pointer', textDecoration: 'underline' }}
+                    onClick={() => {
+                      if (!paramStr.startsWith('{')) {
+                        setParamStr('{}');
+                      }
+                    }}
+                  >
+                    Reset to JSON
+                  </button>
+                </div>
+                <textarea
+                  id="src-params"
+                  className={styles.textarea}
+                  value={paramStr}
+                  placeholder={form.type === 'generic_web' || form.type === 'rss' ? '{} (no query parameters needed)' : 'e.g., {"search": "devops"}'}
+                  onChange={e => setParamStr(e.target.value)}
+                  rows={3}
+                />
+                <span className={styles.fieldHint}>
+                  {form.type === 'generic_web' || form.type === 'rss'
+                    ? 'Leave as {} unless custom selectors are needed.'
+                    : 'URL parameters passed to the API. Must be valid JSON.'}
+                </span>
               </div>
               <div className={styles.formActions}>
                 <button type="button" className={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
