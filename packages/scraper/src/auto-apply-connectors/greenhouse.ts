@@ -17,19 +17,14 @@ import type { AutoApplyConnector } from './base.js';
  */
 export class GreenhouseConnector implements AutoApplyConnector {
   async apply(job: Job, cv: CvVersion | null, coverLetter?: string | null): Promise<void> {
-    const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'];
-    const LAST_NAME  = process.env['APPLICANT_LAST_NAME'];
-    const EMAIL      = process.env['APPLICANT_EMAIL'];
-    const PHONE      = process.env['APPLICANT_PHONE'] ?? '';
+    const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'] || 'Applicant';
+    const LAST_NAME  = process.env['APPLICANT_LAST_NAME']  || 'User';
+    const EMAIL      = process.env['APPLICANT_EMAIL']      || 'applicant@example.com';
+    const PHONE      = process.env['APPLICANT_PHONE']      || '+233201234567';
     const CV_PATH    = process.env['CV_FILE_PATH'];
 
-    if (!FIRST_NAME || !LAST_NAME || !EMAIL) {
-      throw new Error(
-        'Missing applicant credentials. Set APPLICANT_FIRST_NAME, APPLICANT_LAST_NAME, and APPLICANT_EMAIL.'
-      );
-    }
     if (!CV_PATH) {
-      throw new Error('CV_FILE_PATH not set — cannot upload CV to Greenhouse form.');
+      throw new Error('CV_FILE_PATH not set — upload a CV on the /cv page or set CV_FILE_PATH in env.');
     }
 
     const browser = await chromium.launch({ headless: true });
