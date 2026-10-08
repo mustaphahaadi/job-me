@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@job-me/shared';
 import type { Source, NormalizedJob } from '@job-me/shared';
+import { getOrInitSettings } from '@job-me/shared';
 import { RssConnector } from '../connectors/rss.js';
 import { ApiConnector } from '../connectors/api.js';
 import { ArbeitnowConnector } from '../connectors/arbeitnow.js';
@@ -18,6 +19,7 @@ import type { Connector } from '../connectors/base.js';
  * Per-source failure isolation: one broken source never stops the rest.
  */
 export async function runScrape(supabase: SupabaseClient): Promise<void> {
+  const settings = await getOrInitSettings(supabase);
   const { data: sources, error } = await supabase
     .from('sources')
     .select('*')
@@ -32,18 +34,40 @@ export async function runScrape(supabase: SupabaseClient): Promise<void> {
   console.log(`[scrape] Running ${sources.length} source(s).`);
 
   for (const source of sources as Source[]) {
-    await scrapeSource(supabase, source);
+    await scrapeSource(supabase, source, settings.target_roles);
   }
 
   console.log('[scrape] Done.');
 }
 
-async function scrapeSource(supabase: SupabaseClient, source: Source): Promise<void> {
+async function scrapeSource(supabase: SupabaseClient, source: Source, targetRoles: string[]): Promise<void> {
   const scrapedAt = new Date().toISOString();
 
+  // If query_params is empty, fallback to target_roles from Settings
+  const params = { ...(source.query_params as Record<string, unknown>) };
+  const primaryRole = targetRoles[0] || 'Software Engineer';
+
+  if (Object.keys(params).length === 0) {
+    if (source.type === 'jobicy') {
+      params['tag'] = primaryRole.toLowerCase().split(/\s+/)[0];
+      params['count'] = '50';
+    } else if (source.type === 'arbeitnow') {
+      params['search'] = primaryRole;
+    } else if (source.type === 'linkedin') {
+      params['keywords'] = primaryRole;
+      params['location'] = 'Worldwide';
+      params['f_WT'] = '2';
+    } else if (source.type === 'indeed') {
+      params['q'] = primaryRole;
+      params['l'] = 'Remote';
+    }
+  }
+
+  const enrichedSource: Source = { ...source, query_params: params };
+
   try {
-    const connector = getConnector(source);
-    const jobs = await connector.fetch(source);
+    const connector = getConnector(enrichedSource);
+    const jobs = await connector.fetch(enrichedSource);
 
     console.log(`[scrape] ${sanitizeLog(source.name)}: fetched ${jobs.length} job(s).`);
 

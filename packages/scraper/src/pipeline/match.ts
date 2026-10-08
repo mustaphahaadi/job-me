@@ -44,11 +44,14 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
     // Matching score threshold: jobs scoring >= 0.40 with accepted location move to 'matched'
     const MATCH_THRESHOLD = 0.40;
     const isMatched = score >= MATCH_THRESHOLD && breakdown.location.accepted;
-    const newStatus = isMatched ? 'matched' : 'new';
-    if (isMatched) matched++;
+    const isLowScore = score < 0.25 || (breakdown.title_match.score === 0 && breakdown.skills_overlap.score === 0);
 
-    // Clamp to 'closed' if negative keyword hit OR location is not accepted (e.g. foreign on-site)
-    const finalStatus = (breakdown.negative_keyword_hit || !breakdown.location.accepted) ? 'closed' : newStatus;
+    let finalStatus: 'matched' | 'new' | 'closed' = isMatched ? 'matched' : 'new';
+
+    // Transition to 'closed' if negative keyword hit, rejected location, or low suitability score
+    if (breakdown.negative_keyword_hit || !breakdown.location.accepted || isLowScore) {
+      finalStatus = 'closed';
+    }
 
     await supabase.from('jobs').update({
       match_score: score,

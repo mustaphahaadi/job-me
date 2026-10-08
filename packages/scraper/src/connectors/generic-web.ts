@@ -32,7 +32,12 @@ export class GenericWebConnector implements Connector {
       await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 35_000 });
       await page.waitForTimeout(3000); // Allow dynamic JavaScript to render job lists
 
-      const cardSelector = params['card_selector'] || 'a[href*="/job"], a[href*="/careers/"], .job-card, .job-item, article, li';
+      // Auto-scroll down to trigger lazy-loaded cards on SPA job boards like Work at a Startup
+      await page.evaluate(() => window.scrollBy(0, 800));
+      await page.waitForTimeout(1500);
+
+      const cardSelector = params['card_selector'] ||
+        'a[href*="/job"], a[href*="/jobs/"], a[href*="/companies/"], a[href*="/company/"], a[href*="/careers/"], .job-card, .job-item, article, tr, li';
 
       const rawJobs = await page.evaluate(({ cardSel, customTitleSel, customCompanySel, customLinkSel }) => {
         const elements = Array.from(document.querySelectorAll(cardSel));
@@ -50,7 +55,7 @@ export class GenericWebConnector implements Connector {
           if (el.tagName === 'A' && (el as HTMLAnchorElement).href) {
             linkEl = el as HTMLAnchorElement;
           } else {
-            linkEl = el.querySelector(customLinkSel || 'a[href*="/job"], a[href*="/careers/"], a[href*="/view/"], a') as HTMLAnchorElement | null;
+            linkEl = el.querySelector(customLinkSel || 'a[href*="/job"], a[href*="/jobs/"], a[href*="/companies/"], a[href*="/careers/"], a[href*="/view/"], a') as HTMLAnchorElement | null;
           }
 
           if (!linkEl || !linkEl.href) continue;
@@ -62,12 +67,18 @@ export class GenericWebConnector implements Connector {
             title = el.querySelector(customTitleSel)?.textContent?.trim() || '';
           }
           if (!title) {
-            const hEl = el.querySelector('h1, h2, h3, h4, .title, [class*="title" i]');
+            const hEl = el.querySelector('h1, h2, h3, h4, .title, [class*="title" i], [class*="name" i]');
             title = hEl?.textContent?.trim() || linkEl.textContent?.trim() || '';
           }
 
-          // Filter out short non-job link texts (e.g. "Learn more", "Apply")
-          if (!title || title.length < 4 || /^(apply|view|click|more|home|jobs|login|sign up)$/i.test(title)) {
+          // Filter out short non-job link texts & SEO category headers (e.g. "Frontend Developer Jobs in San Francisco")
+          if (
+            !title ||
+            title.length < 4 ||
+            /^(apply|view|click|more|home|jobs|login|sign up|about|privacy|terms)$/i.test(title) ||
+            /jobs in /i.test(title) ||
+            /^(browse|find|all|top|popular|latest) /i.test(title)
+          ) {
             continue;
           }
 
