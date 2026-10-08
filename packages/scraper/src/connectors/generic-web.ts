@@ -37,10 +37,16 @@ export class GenericWebConnector implements Connector {
       await page.waitForTimeout(1500);
 
       const cardSelector = params['card_selector'] ||
-        'a[href*="/job"], a[href*="/jobs/"], a[href*="/companies/"], a[href*="/company/"], a[href*="/careers/"], .job-card, .job-item, article, tr, li';
+        '[data-id="job-card"], [class*="job-card" i], [class*="jobCard" i], [class*="job-item" i], [class*="styles_component" i], article, tr, li';
 
       const rawJobs = await page.evaluate(({ cardSel, customTitleSel, customCompanySel, customLinkSel }) => {
-        const elements = Array.from(document.querySelectorAll(cardSel));
+        let elements = Array.from(document.querySelectorAll(cardSel));
+        
+        // Fallback: If no card containers found, collect job anchor links directly
+        if (elements.length === 0) {
+          elements = Array.from(document.querySelectorAll('a[href*="/job/"], a[href*="/jobs/"], a[href*="/careers/"]'));
+        }
+
         const results: Array<{
           title: string;
           company: string | null;
@@ -55,7 +61,7 @@ export class GenericWebConnector implements Connector {
           if (el.tagName === 'A' && (el as HTMLAnchorElement).href) {
             linkEl = el as HTMLAnchorElement;
           } else {
-            linkEl = el.querySelector(customLinkSel || 'a[href*="/job"], a[href*="/jobs/"], a[href*="/companies/"], a[href*="/careers/"], a[href*="/view/"], a') as HTMLAnchorElement | null;
+            linkEl = el.querySelector(customLinkSel || 'a[data-id="job-card-title"], a[href*="/job/"], a[href*="/jobs/"], a[href*="/careers/"], a[href*="/view/"], a') as HTMLAnchorElement | null;
           }
 
           if (!linkEl || !linkEl.href) continue;
@@ -67,17 +73,18 @@ export class GenericWebConnector implements Connector {
             title = el.querySelector(customTitleSel)?.textContent?.trim() || '';
           }
           if (!title) {
-            const hEl = el.querySelector('h1, h2, h3, h4, .title, [class*="title" i], [class*="name" i]');
+            const hEl = el.querySelector('[data-id="job-card-title"], h1, h2, h3, h4, .title, [class*="title" i], [class*="role" i]');
             title = hEl?.textContent?.trim() || linkEl.textContent?.trim() || '';
           }
 
-          // Filter out short non-job link texts & SEO category headers (e.g. "Frontend Developer Jobs in San Francisco")
+          // Filter out junk titles, button texts, category headings & open position counts
           if (
             !title ||
-            title.length < 4 ||
-            /^(apply|view|click|more|home|jobs|login|sign up|about|privacy|terms)$/i.test(title) ||
+            title.length < 3 ||
+            /^\d+\s+(open\s+)?(position|job|role)s?/i.test(title) ||
+            /^(apply|view|click|more|home|jobs|login|sign up|about|privacy|terms|learn more|create profile)$/i.test(title) ||
             /jobs in /i.test(title) ||
-            /^(browse|find|all|top|popular|latest) /i.test(title)
+            /^(browse|find|all|top|popular|latest|explore|view company) /i.test(title)
           ) {
             continue;
           }
@@ -88,12 +95,20 @@ export class GenericWebConnector implements Connector {
             company = el.querySelector(customCompanySel)?.textContent?.trim() || null;
           }
           if (!company) {
-            const companyEl = el.querySelector('.company, [class*="company" i], [class*="employer" i], .subtitle');
+            const companyEl = el.querySelector('[data-id="company-title"], [data-id="company-name"], [data-test="StartupName"], .company, [class*="company" i], [class*="employer" i], [class*="startup" i], .subtitle');
             company = companyEl?.textContent?.trim() || null;
           }
 
+          // Fallback company name from URL if missing (e.g. /company/stripe/ -> "Stripe")
+          if (!company) {
+            const companyUrlMatch = href.match(/\/(company|companies)\/([^/]+)/i);
+            if (companyUrlMatch && companyUrlMatch[2]) {
+              company = companyUrlMatch[2].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            }
+          }
+
           // Extract location
-          const locEl = el.querySelector('.location, [class*="location" i], [class*="city" i], [class*="region" i]');
+          const locEl = el.querySelector('[data-id="job-card-location"], .location, [class*="location" i], [class*="city" i], [class*="region" i], [class*="remote" i]');
           const location = locEl?.textContent?.trim() || null;
 
           const snippet = el.textContent?.slice(0, 300) ?? null;
