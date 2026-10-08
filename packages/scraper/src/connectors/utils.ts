@@ -1,8 +1,56 @@
+import type { Source } from '@job-me/shared';
+
 export function buildUrl(base: string, params: Record<string, string>): string {
   const entries = Object.entries(params).filter(([, v]) => v != null && v !== '');
   if (entries.length === 0) return base;
   const qs = new URLSearchParams(entries).toString();
   return `${base}${base.includes('?') ? '&' : '?'}${qs}`;
+}
+
+/** The /settings fields that drive scrape queries. */
+export interface ScrapeSettings {
+  target_roles?: string[];
+  accepted_locations?: string[];
+  days_posted_default?: number;
+}
+
+/**
+ * Applies the /settings configuration to a source before scraping.
+ *
+ * Any `{placeholder}` in base_url or in a string query_param is
+ * substituted from settings:
+ *   {roles}     all target roles, space-joined
+ *   {role}      first target role
+ *   {locations} all accepted locations, space-joined
+ *   {location}  first accepted location
+ *   {days}      days_posted_default
+ *
+ * This makes every source type follow the Settings page — including
+ * generic web pages, where the search terms live in the URL itself
+ * (e.g. base_url "https://example.com/jobs?q={role}&l={location}").
+ * Sources without placeholders keep their configured values verbatim.
+ */
+export function applySettingsToSource(source: Source, settings: ScrapeSettings): Source {
+  const roles = settings.target_roles ?? [];
+  const locations = settings.accepted_locations ?? [];
+  const values: Record<string, string> = {
+    roles: roles.join(' '),
+    role: roles[0] ?? 'Software Engineer',
+    locations: locations.join(' '),
+    location: locations[0] ?? '',
+    days: String(settings.days_posted_default ?? 14),
+  };
+
+  const substitute = (text: string): string =>
+    text.replace(/\{(roles?|locations?|days)\}/gi, (match, key: string) =>
+      values[key.toLowerCase()] ?? match);
+
+  const params: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source.query_params ?? {})) {
+    params[key] = typeof value === 'string' ? substitute(value) : value;
+  }
+
+  return { ...source, base_url: substitute(source.base_url), query_params: params };
 }
 
 export function toIsoDate(raw: string): string {

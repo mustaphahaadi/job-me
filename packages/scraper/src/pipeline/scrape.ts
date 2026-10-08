@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@job-me/shared';
-import type { Source, NormalizedJob } from '@job-me/shared';
+import type { Source, NormalizedJob, Settings } from '@job-me/shared';
 import { getOrInitSettings } from '@job-me/shared';
 import { RssConnector } from '../connectors/rss.js';
 import { ApiConnector } from '../connectors/api.js';
@@ -10,13 +10,21 @@ import { IndeedConnector } from '../connectors/indeed.js';
 import { OttaConnector } from '../connectors/otta.js';
 import { GlassdoorConnector } from '../connectors/glassdoor.js';
 import { GenericWebConnector } from '../connectors/generic-web.js';
-import { sanitizeLog } from '../connectors/utils.js';
+import { applySettingsToSource, sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
 /**
  * Scrape pipeline step — §8.2.
  * Fetches all active sources, calls the right connector, upserts to jobs.
  * Per-source failure isolation: one broken source never stops the rest.
+ *
+ * Every source is scraped with the /settings configuration applied:
+ *   1. {roles} / {role} / {locations} / {location} / {days}
+ *      placeholders in base_url and query_params are substituted
+ *      from settings (works for all 9 connector types).
+ *   2. Sources with no query_params at all get settings-derived
+ *      defaults (first target role, first accepted location,
+ *      days_posted_default recency window).
  */
 export async function runScrape(supabase: SupabaseClient): Promise<void> {
   const settings = await getOrInitSettings(supabase);
@@ -34,36 +42,25 @@ export async function runScrape(supabase: SupabaseClient): Promise<void> {
   console.log(`[scrape] Running ${sources.length} source(s).`);
 
   for (const source of sources as Source[]) {
-    await scrapeSource(supabase, source, settings.target_roles);
+    await scrapeSource(supabase, source, settings);
   }
 
   console.log('[scrape] Done.');
 }
 
-async function scrapeSource(supabase: SupabaseClient, source: Source, targetRoles: string[]): Promise<void> {
+async function scrapeSource(supabase: SupabaseClient, source: Source, settings: Settings): Promise<void> {
   const scrapedAt = new Date().toISOString();
 
-  // If query_params is empty, fallback to target_roles from Settings
-  const params = { ...(source.query_params as Record<string, unknown>) };
-  const primaryRole = targetRoles[0] || 'Software Engineer';
+  // 1. Apply /settings — substitute placeholders in base_url and
+  //    query_params so the source follows the Settings page.
+  let enrichedSource = applySettingsToSource(source, settings);
 
+  // 2. Still no query_params? Derive defaults from settings.
+  const params = { ...(enrichedSource.query_params as Record<string, unknown>) };
   if (Object.keys(params).length === 0) {
-    if (source.type === 'jobicy') {
-      params['tag'] = primaryRole.toLowerCase().split(/\s+/)[0];
-      params['count'] = '50';
-    } else if (source.type === 'arbeitnow') {
-      params['search'] = primaryRole;
-    } else if (source.type === 'linkedin') {
-      params['keywords'] = primaryRole;
-      params['location'] = 'Worldwide';
-      params['f_WT'] = '2';
-    } else if (source.type === 'indeed') {
-      params['q'] = primaryRole;
-      params['l'] = 'Remote';
-    }
+    Object.assign(params, settingsDerivedParams(source.type, settings));
   }
-
-  const enrichedSource: Source = { ...source, query_params: params };
+  enrichedSource = { ...enrichedSource, query_params: params };
 
   try {
     const connector = getConnector(enrichedSource);
@@ -94,6 +91,48 @@ async function scrapeSource(supabase: SupabaseClient, source: Source, targetRole
       last_scrape_error: message,
       consecutive_fail_count: (source.consecutive_fail_count ?? 0) + 1,
     }).eq('id', source.id);
+  }
+}
+
+/**
+ * Settings-derived default query params for sources with no
+ * configuration of their own. Uses the first target role and
+ * first accepted location so unconfigured sources still track
+ * the Settings page.
+ */
+function settingsDerivedParams(type: Source['type'], settings: Settings): Record<string, string> {
+  const role = settings.target_roles?.[0] ?? 'Software Engineer';
+  const location = settings.accepted_locations?.[0] ?? '';
+  const days = settings.days_posted_default ?? 14;
+  const locations = (settings.accepted_locations ?? []).map(l => l.toLowerCase());
+  const remoteAccepted = locations.length === 0 ||
+    locations.some(l => ['remote', 'worldwide', 'anywhere', 'global'].includes(l));
+
+  switch (type) {
+    case 'jobicy':
+      return { tag: role.toLowerCase().split(/\s+/)[0] ?? role, count: '50' };
+    case 'arbeitnow':
+      return { search: role };
+    case 'linkedin': {
+      // f_TPR recency window follows days_posted_default:
+      // ≤1 day → 24h, ≤7 days → 7d, otherwise 30d.
+      const f_TPR = days <= 1 ? 'r86400' : days <= 7 ? 'r604800' : 'r2592000';
+      return { keywords: role, location: location || 'Worldwide', f_WT: '2', f_TPR };
+    }
+    case 'indeed':
+      return { q: role, l: location || 'Remote', sort: 'date', fromage: String(days) };
+    case 'glassdoor':
+      return { keyword: role, location: location || 'Remote' };
+    case 'api':
+      // Generic REST — 'search' is understood by Remotive and
+      // ignored harmlessly by APIs that don't support it.
+      return { search: role };
+    case 'otta':
+      return { remote: remoteAccepted ? 'true' : 'false', limit: '50' };
+    default:
+      // rss / generic_web: feeds and pages have fixed URLs — use
+      // {role}/{location} placeholders in base_url instead.
+      return {};
   }
 }
 

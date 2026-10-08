@@ -69,6 +69,7 @@ Runs as a GitHub Actions workflow every 6 hours (or on manual dispatch). Four se
 #### Stage 1 — Scrape (`pipeline/scrape.ts`)
 - Fetches all `active = true` sources from the database
 - Routes each source to the correct connector (9 types: rss, api, generic_web, linkedin, indeed, glassdoor, otta, jobicy, arbeitnow)
+- **Every source is scraped with the /settings configuration applied**: `{roles}` / `{role}` / `{locations}` / `{location}` / `{days}` placeholders in `base_url` and `query_params` are substituted from settings (all 9 connector types, including generic web pages where search terms live in the URL); sources with no query params at all get settings-derived defaults (first target role, first accepted location, `days_posted_default` recency window where the API supports it)
 - Per-source failure isolation: one broken source never stops the rest
 - Upsert strategy (3 queries instead of N+1):
   1. Fetch all existing URLs in one query
@@ -118,7 +119,7 @@ Runs as a GitHub Actions workflow every 6 hours (or on manual dispatch). Four se
 
 Both connectors are subclassable — extend `ApiConnector.parse()` or `ApiConnector.normalizeItem()` for source-specific quirks without touching the base.
 
-The remaining seven connector types live alongside them: `generic_web` (Playwright scraper for any public careers page), `linkedin`, `indeed`, `glassdoor` (Playwright scrapers), `otta`, `jobicy`, and `arbeitnow` (free public APIs). Shared helpers (`buildUrl`, `toIsoDate`, `sanitizeLog`, `extractLocationFromText`) live in `connectors/utils.ts` — `sanitizeLog` strips `\r\n` from every external string before it reaches a log line.
+The remaining seven connector types live alongside them: `generic_web` (Playwright scraper for any public careers page — search terms can be wired into the URL via `{role}`/`{location}` placeholders), `linkedin`, `indeed`, `glassdoor` (Playwright scrapers), `otta`, `jobicy`, and `arbeitnow` (free public APIs). Shared helpers (`buildUrl`, `toIsoDate`, `sanitizeLog`, `extractLocationFromText`, `applySettingsToSource`) live in `connectors/utils.ts` — `sanitizeLog` strips `\r\n` from every external string before it reaches a log line.
 
 ---
 

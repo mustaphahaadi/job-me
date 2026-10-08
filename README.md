@@ -201,13 +201,14 @@ The pipeline downloads the file of each job's **role-matched** CV row from Supab
 
 Go to `/settings` and set:
 
-- **Target roles** — job title keywords for the scoring engine
+- **Target roles** — job title keywords for the scoring engine; also the default search terms for sources with no query params of their own (use `{role}` / `{roles}` placeholders to wire them into any source)
 - **Target seniority** — junior / mid / senior / any
-- **Accepted locations** — e.g. `remote`, `uk`, `worldwide`
+- **Accepted locations** — used by the location scoring signal and as the default scrape location (use `{location}` / `{locations}` placeholders)
 - **Negative keywords** — any keyword that immediately disqualifies a job
 - **Skill vocabulary** — skills from your CV used for the skills overlap signal
 - **Auto-apply threshold** — minimum score to trigger auto-apply (default 75%)
 - **Max auto-apply per run** — rate cap per pipeline run (default 5)
+- **Days-since-posted default** — feed filter and recency scoring window (use `{days}` placeholder)
 
 ### Step 5 — Get a Gemini API key (optional, free)
 
@@ -291,9 +292,32 @@ From `/sources`, click **Add source**:
 - **Base URL** — the feed or API endpoint
 - **Query params** — JSON object of URL parameters
 
+### Settings placeholders
+
+Every source is scraped with your **/settings** configuration applied. Any of these placeholders can be used in the **Base URL** or in **Query params** (string values), and are substituted at scrape time:
+
+| Placeholder | Resolves to |
+|---|---|
+| `{roles}` | All target roles, space-joined |
+| `{role}` | First target role |
+| `{locations}` | All accepted locations, space-joined |
+| `{location}` | First accepted location |
+| `{days}` | Days-since-posted default |
+
+This works for **all 9 source types** — including generic web pages, where the search terms live in the URL itself. Sources without placeholders keep their configured values verbatim. Sources with **no query params at all** get settings-derived defaults automatically (first target role, first accepted location, and a recency window from `days_posted_default` where the API supports it).
+
 ### Example configs
 
-**Generic Web Page (Playwright) — Public Careers Page**
+**Generic Web Page (Playwright) — any careers page, driven by Settings**
+```json
+{
+  "type": "generic_web",
+  "base_url": "https://example.com/jobs?q={role}&location={location}&posted_within={days}",
+  "query_params": { "card_selector": ".job-card", "title_selector": ".job-card h3" }
+}
+```
+
+**Generic Web Page (Playwright) — Public Careers Page (fixed URL)**
 ```json
 {
   "type": "generic_web",
