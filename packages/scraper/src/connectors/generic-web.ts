@@ -77,12 +77,12 @@ export class GenericWebConnector implements Connector {
             title = hEl?.textContent?.trim() || linkEl.textContent?.trim() || '';
           }
 
-          // Filter out junk titles, button texts, category headings & open position counts
+          // Filter out junk titles, button texts, navigation menus, product badges & open position counts
           if (
             !title ||
             title.length < 3 ||
             /^\d+\s+(open\s+)?(position|job|role)s?/i.test(title) ||
-            /^(apply|view|click|more|home|jobs|login|sign up|about|privacy|terms|learn more|create profile)$/i.test(title) ||
+            /^(apply|view|click|more|home|jobs|login|sign up|about|privacy|terms|learn more|create profile|hire developers|wellfound.*|curated|recruit pro|overview|remote|features|pricing|salaries|get discovered|post a job)$/i.test(title) ||
             /jobs in /i.test(title) ||
             /^(browse|find|all|top|popular|latest|explore|view company) /i.test(title)
           ) {
