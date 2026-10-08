@@ -18,6 +18,8 @@ scrape → enrich (AI spam filter) → match (5-signal score) → auto-apply (AI
 - Dashboard to review, filter, dismiss, bulk-delete, and manually apply to jobs
 - Full applications history with method, CV used, and score
 
+> 📚 **Teaching & Workshop Guide**: Planning to teach or demonstrate `job-me` to students or team members? See the complete step-by-step [**TEACHING_GUIDE.md**](./TEACHING_GUIDE.md) for a zero-deployment local walkthrough.
+
 ---
 
 ## Stack
@@ -66,18 +68,16 @@ job-me/
 - pnpm `^9` — `npm install -g pnpm`
 - A Supabase project (free tier is fine)
 
-### 1. Fork and clone
+### 1. Clone or Fork
 
-**Fork first** — the pipeline runs from your own GitHub Actions, so you need your own copy.
-
-1. Click **Fork** on GitHub (top-right of this repo)
-2. Clone your fork:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/job-me.git
-cd job-me
-pnpm install
-```
+- **To run 100% locally (for learning, local testing, or teaching)**:
+  ```bash
+  git clone https://github.com/YOUR_USERNAME/job-me.git
+  cd job-me
+  pnpm install
+  ```
+- **To deploy automated 6-hour runs on GitHub Actions**:
+  Click **Fork** on GitHub (top-right of this repo) and clone your fork.
 
 ### 2. Set up Supabase
 
