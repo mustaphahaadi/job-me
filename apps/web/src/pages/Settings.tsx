@@ -1,21 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Check } from 'lucide-react';
 import type { Settings } from '@job-me/shared';
-import { DEFAULT_SKILL_VOCABULARY } from '@job-me/shared';
+import { DEFAULT_SETTINGS, DEFAULT_SKILL_VOCABULARY } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import styles from './Settings.module.css';
 
-const EMPTY_SETTINGS: Settings = {
-  id: 1,
-  target_roles: ['Software Engineer', 'Backend Engineer', 'Full Stack Engineer'],
-  days_posted_default: 14,
-  auto_apply_score_threshold: 0.75,
-  max_auto_apply_per_run: 5,
-  target_seniority: 'mid',
-  accepted_locations: ['remote'],
-  negative_keywords: [],
-  skill_vocabulary: DEFAULT_SKILL_VOCABULARY,
-};
+/** Pre-load state = the same defaults the schema seeds, so the page never
+ *  flashes generic roles before the real row arrives. */
+const EMPTY_SETTINGS: Settings = { ...DEFAULT_SETTINGS };
 
 const SENIORITY_OPTIONS: Array<{ value: Settings['target_seniority']; label: string }> = [
   { value: 'junior', label: 'Junior' },
@@ -177,7 +169,7 @@ export default function SettingsPage() {
           </div>
           <div className={styles.presetGroup}>
             <span className={styles.presetLabel}>Quick add:</span>
-            {['Software Engineer', 'Backend Engineer', 'Frontend Engineer', 'Full Stack Engineer', 'Data Engineer'].map(preset => (
+            {['Cloud Engineer', 'DevOps Engineer', 'Platform Engineer', 'Site Reliability Engineer', 'SRE', 'AWS Technical Trainer', 'AWS Instructor'].map(preset => (
               !settings.target_roles.includes(preset) && (
                 <button key={preset} type="button" className={styles.presetChip}
                   onClick={() => setSettings(s => ({ ...s, target_roles: [...s.target_roles, preset] }))}>
@@ -218,7 +210,7 @@ export default function SettingsPage() {
         {/* ── Accepted locations ───────────────────────────────────── */}
         <section className={styles.section} id="settings-locations">
           <h2 className={styles.sectionTitle}>Accepted locations</h2>
-          <p className={styles.sectionDesc}>Jobs outside these locations score 0 on the location signal. Use lowercase terms like "remote", "uk", "united kingdom". An empty list accepts all locations.</p>
+          <p className={styles.sectionDesc}>Jobs whose location matches none of these terms are rejected and closed by the match step (remote and Ghana locations are prioritised when listed). Use lowercase terms like "remote", "ghana", "nigeria". An empty list accepts all locations.</p>
           <div className={styles.roleList}>
             {(settings.accepted_locations ?? []).map(loc => (
               <div key={loc} className={styles.roleTag}>

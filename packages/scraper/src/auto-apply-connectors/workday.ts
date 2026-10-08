@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import type { Job, CvVersion } from '@job-me/shared';
 import type { AutoApplyConnector } from './base.js';
+import { detectCaptcha, captchaError } from './base.js';
 
 /**
  * Workday ATS auto-apply connector.
@@ -17,12 +18,12 @@ import type { AutoApplyConnector } from './base.js';
  * Step 3 custom questions are left blank — extend per-company if needed.
  */
 export class WorkdayConnector implements AutoApplyConnector {
-  async apply(job: Job, cv: CvVersion | null, coverLetter?: string | null): Promise<void> {
+  async apply(job: Job, cv: CvVersion | null, coverLetter: string | null | undefined, cvFilePath: string): Promise<void> {
     const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'] || 'Applicant';
     const LAST_NAME  = process.env['APPLICANT_LAST_NAME']  || 'User';
     const EMAIL      = process.env['APPLICANT_EMAIL']      || 'applicant@example.com';
     const PHONE      = process.env['APPLICANT_PHONE']      || '+233201234567';
-    const CV_PATH    = process.env['CV_FILE_PATH'];
+    const CV_PATH    = cvFilePath || process.env['CV_FILE_PATH'];
 
     if (!CV_PATH) {
       throw new Error('CV_FILE_PATH not set — upload a CV on the /cv page or set CV_FILE_PATH in env.');
@@ -82,6 +83,10 @@ export class WorkdayConnector implements AutoApplyConnector {
       }
 
       // ── Drive through remaining steps (Application Questions → Self Identify → Review) ──
+      // Fail fast on CAPTCHA walls instead of submitting into them.
+      const captcha = await detectCaptcha(page);
+      if (captcha) throw captchaError(captcha);
+
       for (let step = 0; step < 5; step++) {
         const advanced = await this._clickNext(page);
         if (!advanced) break;

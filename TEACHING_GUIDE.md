@@ -98,12 +98,11 @@ Create two environment files in your workspace:
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-
-# Optional — enables the "Run now" button on /sources page
-VITE_GITHUB_PAT=github_pat_xxxxxx
-VITE_GITHUB_REPO=YOUR_USERNAME/job-me
-VITE_GITHUB_BRANCH=main
 ```
+
+> The "Run now" button needs no frontend credentials — it calls the
+> `trigger-pipeline` edge function, which holds the GitHub PAT as a
+> server-side secret (see the README, "Step 2.1").
 
 ### 2. Scraper Environment File: `packages/scraper/.env`
 ```env
@@ -116,11 +115,11 @@ APPLICANT_LAST_NAME=Doe
 APPLICANT_EMAIL=jane.doe@example.com
 APPLICANT_PHONE=+233201234567
 
-# Optional — local path to CV PDF file (e.g., ./my-cv.pdf)
-# If left blank, the scraper automatically downloads your CV from Supabase Storage!
+# Optional — fallback CV path, used only for jobs that match no CV row.
+# Auto-apply otherwise downloads each job's role-matched CV from Supabase Storage!
 CV_FILE_PATH=
 
-# Optional — Google Gemini 1.5 Flash API Key for AI cover letters & spam filtering
+# Optional — Google Gemini 2.5 Flash API Key for AI cover letters & spam filtering
 # Get free key at: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=
 ```

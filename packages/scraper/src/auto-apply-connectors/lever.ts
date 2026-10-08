@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import type { Job, CvVersion } from '@job-me/shared';
 import type { AutoApplyConnector } from './base.js';
+import { detectCaptcha, captchaError } from './base.js';
 
 /**
  * Lever ATS auto-apply connector.
@@ -15,12 +16,12 @@ import type { AutoApplyConnector } from './base.js';
  *   - Submit button
  */
 export class LeverConnector implements AutoApplyConnector {
-  async apply(job: Job, cv: CvVersion | null, coverLetter?: string | null): Promise<void> {
+  async apply(job: Job, cv: CvVersion | null, coverLetter: string | null | undefined, cvFilePath: string): Promise<void> {
     const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'] || 'Applicant';
     const LAST_NAME  = process.env['APPLICANT_LAST_NAME']  || 'User';
     const EMAIL      = process.env['APPLICANT_EMAIL']      || 'applicant@example.com';
     const PHONE      = process.env['APPLICANT_PHONE']      || '+233201234567';
-    const CV_PATH    = process.env['CV_FILE_PATH'];
+    const CV_PATH    = cvFilePath || process.env['CV_FILE_PATH'];
 
     if (!CV_PATH) {
       throw new Error('CV_FILE_PATH not set — upload a CV on the /cv page or set CV_FILE_PATH in env.');
@@ -61,6 +62,10 @@ export class LeverConnector implements AutoApplyConnector {
       }
 
       // ── Step 4: Submit ──────────────────────────────────────────
+      // Fail fast on CAPTCHA walls instead of submitting into them.
+      const captcha = await detectCaptcha(page);
+      if (captcha) throw captchaError(captcha);
+
       const submitBtn = await page.$('button[type="submit"], input[type="submit"]');
       if (!submitBtn) throw new Error('Submit button not found — form structure may have changed.');
       await submitBtn.click();

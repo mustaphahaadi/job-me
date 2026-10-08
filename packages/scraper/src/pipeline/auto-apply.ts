@@ -25,42 +25,64 @@ function findConnector(jobUrl: string): AutoApplyConnector | null {
 }
 
 /**
+ * Downloads a CV version's file from Supabase Storage to a tmp file, cached by
+ * CV id so multiple jobs matching the same CV re-use one download.
+ */
+async function ensureCvFile(supabase: SupabaseClient, cv: CvVersion, cache: Map<string, string>): Promise<string | null> {
+  const cached = cache.get(cv.id);
+  if (cached && fs.existsSync(cached)) return cached;
+  if (!cv.file_path) return null;
+
+  try {
+    const { data: blob, error } = await supabase.storage.from('cv-files').download(cv.file_path);
+    if (error || !blob) {
+      console.warn(`[auto-apply] Could not download CV "${cv.label}" from storage: ${String(error?.message ?? 'empty blob').replace(/[\r\n]/g, ' ')}`);
+      return null;
+    }
+    const tmpPath = path.join(os.tmpdir(), `cv-${cv.id}.pdf`);
+    fs.writeFileSync(tmpPath, Buffer.from(await blob.arrayBuffer()));
+    cache.set(cv.id, tmpPath);
+    return tmpPath;
+  } catch (dlException) {
+    console.warn('[auto-apply] Could not download CV from Supabase Storage:', dlException);
+    return null;
+  }
+}
+
+/**
  * Auto-apply pipeline step — §8.4.
- * Processes eligible matched jobs in order. Rate-capped per source.
- * On failure: moves to manual_queue with error detail — never silently retries.
+ * Processes eligible matched jobs in order.
  *
- * Rate cap: only successful applications count toward MAX_PER_RUN.
- * Jobs without a recognized ATS connector are moved to manual_queue (not counted).
+ * Rate cap: attempts against a recognized connector count toward MAX_PER_RUN
+ * (successes AND failures) — a single run can never submit more than the cap
+ * to a site, no matter how many eligible jobs fail.
+ *
+ * CV selection: each job uploads the file of its role-matched CV (by CV id),
+ * not whatever CV_FILE_PATH happens to point at. CV_FILE_PATH / the most
+ * recently uploaded CV is only the fallback when a job matches no CV row.
+ *
+ * Jobs without a recognized ATS connector are moved to manual_queue (not an
+ * attempt). On failure: moves to manual_queue with error detail — never
+ * silently retries.
  */
 export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
   const settings = await getOrInitSettings(supabase);
 
   const { data: cvVersions } = await supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false });
   const cvs = (cvVersions ?? []) as CvVersion[];
+  const cvFileCache = new Map<string, string>();
 
-  let cvPath = process.env['CV_FILE_PATH'];
+  // Fallback path — used only when a job's selected CV has no downloadable file.
+  let fallbackCvPath = process.env['CV_FILE_PATH'] ?? null;
 
-  // Fallback: If CV_FILE_PATH is not set in env, download the uploaded CV from Supabase Storage
-  if (!cvPath && cvs.length > 0 && cvs[0]?.file_path) {
-    try {
-      const defaultCv = cvs[0]!;
-      console.log(`[auto-apply] CV_FILE_PATH not set in env — downloading uploaded CV "${defaultCv.label}" from Supabase Storage...`);
-      const { data: blob, error: dlErr } = await supabase.storage.from('cv-files').download(defaultCv.file_path);
-      if (blob && !dlErr) {
-        const tmpPath = path.join(os.tmpdir(), `cv-${defaultCv.id}.pdf`);
-        const buffer = Buffer.from(await blob.arrayBuffer());
-        fs.writeFileSync(tmpPath, buffer);
-        cvPath = tmpPath;
-        process.env['CV_FILE_PATH'] = tmpPath;
-        console.log(`[auto-apply] Successfully downloaded CV to temporary path ${tmpPath}`);
-      }
-    } catch (dlException) {
-      console.warn('[auto-apply] Could not download CV from Supabase Storage:', dlException);
-    }
+  if (!fallbackCvPath && cvs.length > 0 && cvs[0]?.file_path) {
+    const defaultCv = cvs[0];
+    console.log(`[auto-apply] CV_FILE_PATH not set in env — downloading most recent CV "${defaultCv.label}" from Supabase Storage...`);
+    fallbackCvPath = await ensureCvFile(supabase, defaultCv, cvFileCache);
   }
 
   // Guard: auto-apply requires a CV path. Skip step if missing.
-  if (!cvPath) {
+  if (!fallbackCvPath) {
     console.log('[auto-apply] No CV file available (set CV_FILE_PATH in env or upload a CV on the /cv page) — skipping auto-apply step.');
     return;
   }
@@ -84,13 +106,13 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
 
   console.log(`[auto-apply] ${jobs.length} eligible job(s) above threshold ${scoreThreshold}.`);
 
-  // Rate cap: applies to successful submissions only
   const MAX_PER_RUN = settings.max_auto_apply_per_run ?? 5;
+  let attempts = 0;
   let successful = 0;
 
   for (const job of jobs as Job[]) {
-    if (successful >= MAX_PER_RUN) {
-      console.log(`[auto-apply] Success cap reached (${MAX_PER_RUN}). Stopping.`);
+    if (attempts >= MAX_PER_RUN) {
+      console.log(`[auto-apply] Attempt cap reached (${MAX_PER_RUN}). Stopping.`);
       break;
     }
 
@@ -103,6 +125,13 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
     }
 
     const cv = selectCvForTitle(cvs, job.title);
+    // Upload the role-matched CV's file; fall back to the default path only
+    // when the selected CV's file cannot be downloaded.
+    const jobCvPath: string = (cv ? await ensureCvFile(supabase, cv, cvFileCache) : null) ?? fallbackCvPath;
+    if (cv && jobCvPath === fallbackCvPath && cvFileCache.get(cv.id) === undefined) {
+      console.warn(`[auto-apply] CV "${cv.label}" file unavailable — using fallback CV file for ${sanitizeLog(job.title)}.`);
+    }
+
     const now = new Date().toISOString();
 
     // Generate cover letter via Gemini (best-effort — null if key missing or API fails)
@@ -127,8 +156,9 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
       await supabase.from('jobs').update({ cover_letter_text: coverLetter }).eq('id', job.id);
     }
 
+    attempts++;
     try {
-      await connector.apply(job, cv, coverLetter);
+      await connector.apply(job, cv, coverLetter, jobCvPath);
 
       // ── Success ─────────────────────────────────────────────────────────────
       await supabase.from('jobs').update({
@@ -145,7 +175,7 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
       });
 
       console.log(`[auto-apply] ${sanitizeLog(job.title)} at ${sanitizeLog(job.company)} → SUCCESS`);
-      successful++; // Only successes count toward the rate cap
+      successful++;
 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -158,10 +188,9 @@ export async function runAutoApply(supabase: SupabaseClient): Promise<void> {
         auto_apply_result: 'failed',
         auto_apply_error: message.slice(0, 500), // Guard against very long stack traces
       }).eq('id', job.id);
-
-      // Failures do NOT count toward rate cap — allows good jobs to still be processed
+      // The failed attempt still consumed rate-cap budget (§8.4).
     }
   }
 
-  console.log(`[auto-apply] Done. ${successful} application(s) submitted.`);
+  console.log(`[auto-apply] Done. ${successful}/${attempts} application(s) submitted (attempt cap ${MAX_PER_RUN}).`);
 }

@@ -217,6 +217,13 @@
   color: var(--danger);
 }
 
+.thresholdNote {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  font-family: var(--font-data);
+  color: var(--text-muted);
+}
+
 /* ── CV select ────────────────────────────────────────────────*/
 .select {
   width: 100%;
@@ -265,7 +272,7 @@
 .btnPrimary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text);
 }
 
 .btnPrimary:hover:not(:disabled) {

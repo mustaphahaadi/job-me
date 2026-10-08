@@ -10,7 +10,7 @@ scrape → enrich (AI spam filter) → match (5-signal score) → auto-apply (AI
 
 ## What it does
 
-- Scrapes 8 job board types on a 6-hour cron (RSS, API, LinkedIn, Indeed, Glassdoor, Otta, Jobicy, Arbeitnow)
+- Scrapes 9 job board types on a 6-hour cron (RSS, API, generic web, LinkedIn, Indeed, Glassdoor, Otta, Jobicy, Arbeitnow)
 - Scores every job `0–100%` using a 5-signal algorithm (title, skills, seniority, location, recency)
 - Filters spam and confirms remote status using Gemini AI (free tier, optional)
 - Auto-applies to Greenhouse, Lever, and Workday roles above your score threshold
@@ -29,7 +29,7 @@ scrape → enrich (AI spam filter) → match (5-signal score) → auto-apply (AI
 | Frontend | React 18, React Router v6, CSS Modules |
 | Backend | Supabase (Postgres + RLS + Storage + Realtime) |
 | Scraper | Node.js, Playwright (Chromium), rss-parser |
-| AI | Google Gemini 1.5 Flash (free tier) |
+| AI | Google Gemini 2.5 Flash (free tier) |
 | CI/CD | GitHub Actions (6-hour cron + manual trigger) |
 | Hosting | Vercel (frontend) |
 | Package manager | pnpm workspaces |
@@ -98,11 +98,6 @@ job-me/
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-
-# Optional — enables the "Run now" button on /sources
-VITE_GITHUB_PAT=github_pat_xxxxxx
-VITE_GITHUB_REPO=YOUR_USERNAME/job-me
-VITE_GITHUB_BRANCH=main
 ```
 
 **`packages/scraper/.env`**
@@ -155,9 +150,6 @@ pnpm build        # Production build of the frontend
 |---|---|
 | `VITE_SUPABASE_URL` | `https://your-project-ref.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
-| `VITE_GITHUB_PAT` | GitHub PAT with `repo` + `workflow` scopes (optional) |
-| `VITE_GITHUB_REPO` | `YOUR_USERNAME/job-me` (optional) |
-| `VITE_GITHUB_BRANCH` | `main` (optional) |
 
 4. Click **Deploy**
 
@@ -182,7 +174,20 @@ Go to your fork → **Settings → Secrets and variables → Actions → New rep
 | `APPLICANT_PHONE` | Optional | Your phone e.g. `+447123456789` |
 | `GEMINI_API_KEY` | Optional | Enables AI features (cover letters + spam filter) |
 
-The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button (requires `VITE_GITHUB_PAT`).
+The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button (requires the `trigger-pipeline` edge function — see next step).
+
+### Step 2.1 — Deploy the `trigger-pipeline` edge function
+
+The **Run now** button dispatches the workflow through a Supabase Edge Function, so the GitHub PAT never touches the frontend bundle:
+
+```bash
+supabase functions deploy trigger-pipeline --no-verify-jwt
+supabase secrets set GH_TOKEN=github_pat_xxxxxx GITHUB_REPO=YOUR_USERNAME/job-me GITHUB_BRANCH=main
+```
+
+- `GH_TOKEN` — fine-grained PAT with **Actions: Read and write** on the repo (a classic PAT with `repo` + `workflow` scopes also works)
+- `GITHUB_REPO` — `owner/repo`
+- `GITHUB_BRANCH` — optional, defaults to `main`
 
 ### Step 3 — Upload your CV
 
@@ -190,7 +195,7 @@ The pipeline runs automatically every 6 hours. You can also trigger it manually 
 2. Upload your CV (PDF)
 3. Set it as the default for your target roles
 
-The pipeline reads the latest uploaded CV from the database automatically — no hardcoded paths.
+The pipeline downloads the file of each job's **role-matched** CV row from Supabase Storage automatically (a `CV_FILE_PATH` fallback is used only for jobs that match no CV row) — no hardcoded paths.
 
 ### Step 4 — Configure your settings
 
@@ -239,13 +244,13 @@ Every job is scored `0.00–1.00` across 5 signals:
 
 | Signal | Weight | Logic |
 |---|---|---|
-| Title match | **40%** | Fuzzy match against your target roles |
-| Skills overlap | **30%** | Keyword match against your skill vocabulary in the description |
+| Title match | **40%** | Whole-word overlap against your target roles (initialisms like SRE ↔ Site Reliability Engineer match too). No role words → score forced to 0 |
+| Skills overlap | **30%** | Whole-word match against your skill vocabulary in the description |
 | Seniority | **15%** | Detected level vs target; adjacent levels get partial credit |
-| Location | **10%** | Top priority (1.0) for Ghana (on-site & remote); 0.95 for remote roles globally/Africa; on-site non-Ghana roles filtered out (0.0) |
+| Location | **10%** | Driven by your accepted-locations setting: 1.0 for listed Ghana locations, 0.95 for listed remote locations, 0.8 for other accepted locations; anything else → rejected and closed. An empty list accepts all locations |
 | Recency decay | **5%** | Exponential decay — 14-day-old post scores ~37% |
 
-A negative keyword hit forces the score to `0.00` immediately and closes the job.
+A negative keyword hit forces the score to `0.00` immediately and closes the job. Jobs scoring ≥ 40% (`MATCH_PROMOTION_THRESHOLD`) with an accepted location are promoted from **New** to **Matched**; already-matched jobs keep their status (no flapping), and manual-queue jobs are never auto-promoted.
 
 ---
 
@@ -273,7 +278,7 @@ A negative keyword hit forces the score to `0.00` immediately and closes the job
 | Lever | `jobs.lever.co`, `lever.co/` |
 | Workday | `myworkdayjobs.com`, `wd3.myworkday.com`, `wd1.myworkday.com` |
 
-Jobs with no matching connector go to **Manual Queue** automatically. Only successful applications count toward the per-run rate cap.
+Jobs with no matching connector go to **Manual Queue** automatically (these don't consume rate-cap budget). Every attempt against a connector — success or failure — counts toward the per-run rate cap.
 
 ---
 
@@ -343,9 +348,6 @@ From `/sources`, click **Add source**:
 |---|---|---|
 | `VITE_SUPABASE_URL` | ✅ | Your Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase anon key (safe to expose in frontend) |
-| `VITE_GITHUB_PAT` | Optional | GitHub PAT — enables "Run now" button |
-| `VITE_GITHUB_REPO` | Optional | `username/repo` — required if PAT is set |
-| `VITE_GITHUB_BRANCH` | Optional | Branch to trigger workflow on (default: `main`) |
 
 ### `packages/scraper/.env` / GitHub Actions secrets
 
@@ -357,10 +359,10 @@ From `/sources`, click **Add source**:
 | `APPLICANT_LAST_NAME` | ✅ | Used in auto-apply form fields |
 | `APPLICANT_EMAIL` | ✅ | Used in auto-apply form fields |
 | `APPLICANT_PHONE` | Optional | Used in auto-apply phone fields |
-| `CV_FILE_PATH` | ✅* | Local path to CV PDF — auto-set in CI from Supabase Storage |
+| `CV_FILE_PATH` | Optional* | Fallback CV path — used only for jobs that match no CV row |
 | `GEMINI_API_KEY` | Optional | Enables AI spam filtering and cover letter generation |
 
-> \* In GitHub Actions, `CV_FILE_PATH` is set automatically by the workflow — it downloads the most recently uploaded CV from Supabase Storage. You only need to set it manually for local pipeline runs.
+> \* In GitHub Actions, `CV_FILE_PATH` is seeded automatically by the workflow when a CV exists in Supabase Storage, and auto-apply downloads each job's role-matched CV regardless. You only need to set it manually for local pipeline runs without uploaded CVs.
 
 ---
 

@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   match_breakdown           jsonb,
   matched_keywords          text[]      NOT NULL DEFAULT '{}',
   status                    text        NOT NULL DEFAULT 'new'
-                              CHECK (status IN ('new', 'matched', 'auto_applied', 'manual_queue', 'responded', 'closed')),
+                              CHECK (status IN ('new', 'matched', 'auto_applied', 'manual_applied', 'manual_queue', 'responded', 'closed')),
   auto_apply_attempted_at   timestamptz,
   auto_apply_result         text        CHECK (auto_apply_result IN ('success', 'failed')),
   auto_apply_error          text,
@@ -80,6 +80,11 @@ CREATE TABLE IF NOT EXISTS jobs (
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS raw_location       text;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cover_letter_text  text;
 
+-- Status check now includes 'manual_applied' (idempotent: drops and re-adds)
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_status_check;
+ALTER TABLE jobs ADD CONSTRAINT jobs_status_check
+  CHECK (status IN ('new', 'matched', 'auto_applied', 'manual_applied', 'manual_queue', 'responded', 'closed'));
+
 
 CREATE TABLE IF NOT EXISTS applications (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -88,6 +93,10 @@ CREATE TABLE IF NOT EXISTS applications (
   method        text        NOT NULL CHECK (method IN ('auto', 'manual')),
   cv_version_id uuid        REFERENCES cv_versions(id) ON DELETE SET NULL
 );
+
+-- One application per job — prevents duplicate history rows when
+-- "Mark applied" is clicked twice or auto and manual race.
+CREATE UNIQUE INDEX IF NOT EXISTS applications_job_id_uniq ON applications (job_id);
 
 
 CREATE TABLE IF NOT EXISTS settings (

@@ -1,32 +1,46 @@
 /**
- * Gemini AI client — uses gemini-1.5-flash (free tier: 15 req/min, 1M tokens/day).
+ * Gemini AI client — uses gemini-2.5-flash (Google AI Studio free tier).
  *
  * Set GEMINI_API_KEY in the scraper .env / GitHub Actions secrets.
  * If the key is absent the functions return null gracefully — pipeline continues without AI.
  */
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+/** Hard cap on any single Gemini call — a hung request must not stall the pipeline run. */
+const GEMINI_TIMEOUT_MS = 30_000;
 
 async function callGemini(prompt: string, apiKey: string): Promise<string | null> {
-  const res = await fetch(`${GEMINI_API_BASE}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-    }),
-  });
+  try {
+    // API key travels in a header, never in the URL (URLs get logged everywhere).
+    const res = await fetch(GEMINI_API_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+      }),
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+    });
 
-  if (!res.ok) {
-    console.warn(`[ai] Gemini API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')}`);
+    if (!res.ok) {
+      console.warn(`[ai] Gemini API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')}`);
+      return null;
+    }
+
+    const data = await res.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+
+    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ai] Gemini request failed: ${msg.replace(/[\r\n]/g, ' ')}`);
     return null;
   }
-
-  const data = await res.json() as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
 }
 
 /**
@@ -74,7 +88,11 @@ Requirements:
 }
 
 /**
- * Enriches a raw job description — extracts structured signals to improve scoring accuracy.
+ * Enriches a raw job posting with structured signals (remote detection, spam
+ * filter) used by the pipeline. Deliberately does NOT modify the description:
+ * summaries were being prepended on every run (stacking) and AI-generated text
+ * inflated the skills signal during scoring.
+ *
  * Returns null if GEMINI_API_KEY is not set or the API call fails.
  */
 export async function enrichJobDescription(params: {
@@ -82,9 +100,7 @@ export async function enrichJobDescription(params: {
   description: string;
 }): Promise<{
   isRemote: boolean;
-  detectedSeniority: 'junior' | 'mid' | 'senior' | null;
   isSpam: boolean;
-  cleanSummary: string;
 } | null> {
   const apiKey = process.env['GEMINI_API_KEY'];
   if (!apiKey) return null;
@@ -99,9 +115,7 @@ Description: ${descSnippet}
 Respond with exactly this JSON structure:
 {
   "isRemote": true or false,
-  "detectedSeniority": "junior" or "mid" or "senior" or null,
-  "isSpam": true or false (true if this is a recruiter spam post, MLM, unpaid, or not a real job),
-  "cleanSummary": "one sentence summary of the role"
+  "isSpam": true or false (true if this is a recruiter spam post, MLM, unpaid, or not a real job)
 }`;
 
   const raw = await callGemini(prompt, apiKey);
@@ -109,12 +123,7 @@ Respond with exactly this JSON structure:
 
   try {
     const jsonStr = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(jsonStr) as {
-      isRemote: boolean;
-      detectedSeniority: 'junior' | 'mid' | 'senior' | null;
-      isSpam: boolean;
-      cleanSummary: string;
-    };
+    return JSON.parse(jsonStr) as { isRemote: boolean; isSpam: boolean };
   } catch {
     return null;
   }

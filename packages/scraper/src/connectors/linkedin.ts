@@ -69,9 +69,10 @@ export class LinkedInConnector implements Connector {
         }).filter(j => j.title && j.url);
       });
 
-      const GHANA_KEYWORDS  = ['ghana', 'accra', 'kumasi', 'tema', 'takoradi', 'sekondi', 'cape coast', 'tamale'];
-      const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'work from home', 'wfh'];
-
+      // Location policy is deliberately NOT enforced here. The connector-level
+      // filter duplicated scoring with its own hardcoded Ghana/remote lists and
+      // ignored settings.accepted_locations. Jobs are stored as-is; the match
+      // step closes non-matching locations per user settings.
       return jobs.map(j => {
         const rawLoc = j.location ?? extractLocationFromText(j.title) ?? null;
         return {
@@ -83,19 +84,7 @@ export class LinkedInConnector implements Connector {
           raw_location: rawLoc,
           raw_tags: [],
         };
-      }).filter(j => {
-        if (!j.url) return false;
-        const locLower = (j.raw_location ?? '').toLowerCase();
-        const titleLower = j.title.toLowerCase();
-        // Evaluate ONLY the job card location and title — do NOT include params['location']
-        const combined = `${locLower} ${titleLower}`.toLowerCase();
-        const isGhana = GHANA_KEYWORDS.some(k => combined.includes(k));
-        const isRemote = REMOTE_KEYWORDS.some(k => combined.includes(k));
-        // Keep if Ghana (on-site & remote) OR if explicitly remote anywhere else
-        if (isGhana || isRemote) return true;
-        // Reject foreign on-site jobs (e.g. Madrid Spain, Melbourne Australia, Bristol UK)
-        return false;
-      });
+      }).filter(j => Boolean(j.url));
 
     } finally {
       await browser.close();

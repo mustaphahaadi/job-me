@@ -102,14 +102,23 @@ export default function Sources() {
   }
 
   async function handleToggleActive(src: Source) {
-    await supabase.from('sources').update({ active: !src.active }).eq('id', src.id);
-    setSources(prev => prev.map(s => s.id === src.id ? { ...s, active: !s.active } : s));
+    const next = !src.active;
+    setSources(prev => prev.map(s => s.id === src.id ? { ...s, active: next } : s));
+    const { error } = await supabase.from('sources').update({ active: next }).eq('id', src.id);
+    if (error) {
+      console.error('[handleToggleActive]', error);
+      alert(`Failed to update source: ${error.message}`);
+      setSources(prev => prev.map(s => s.id === src.id ? { ...s, active: src.active } : s));
+    }
   }
 
   async function handleRunNow(src: Source) {
     setTriggeringId(src.id);
     try {
       await triggerScrapeNow();
+    } catch (err) {
+      console.error('[handleRunNow] failed:', err);
+      alert('Failed to trigger scrape run.');
     } finally {
       setTriggeringId(null);
     }
@@ -122,7 +131,7 @@ export default function Sources() {
       alert('Triggered pipeline scrape run for all active sources via GitHub Actions.');
     } catch (err) {
       console.error('[handleRunAll] failed:', err);
-      alert('Failed to trigger scrape run. Check VITE_GITHUB_PAT setting.');
+      alert('Failed to trigger scrape run. Check the trigger-pipeline edge function (see README).');
     } finally {
       setTriggeringId(null);
     }

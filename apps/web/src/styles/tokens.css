@@ -1,24 +1,24 @@
 :root {
-  /* ── Palette ──────────────────────────────────────────────── */
-  --bg:             #0f1318;
-  --surface:        #161c24;
-  --surface-raised: #1d2530;
-  --surface-overlay:#222c38;
-  --border:         #263040;
-  --border-subtle:  #1e2730;
-  --text:           #e2e0db;
-  --text-muted:     #7a8494;
-  --text-faint:     #4a5568;
-  --accent:         #4f8cc9;
-  --accent-dim:     rgba(79, 140, 201, 0.12);
-  --accent-hover:   #3d7ab8;
-  --success:        #52b06a;
-  --success-dim:    rgba(82, 176, 106, 0.12);
-  --pending:        #d4973a;
-  --pending-dim:    rgba(212, 151, 58, 0.12);
-  --danger:         #c05a4e;
-  --danger-dim:     rgba(192, 90, 78, 0.12);
-  --new:            #7a8494;
+  /* ── Palette — exact values from spec §2 ───────────────────── */
+  --bg:             #12161C;
+  --surface:        #1A2028;
+  --surface-raised: #212832;
+  --surface-overlay:#212832; /* elevated panels use the raised surface (spec §2) */
+  --border:         #2A323D;
+  --border-subtle:  #232A33; /* darker hairline derived from --border */
+  --text:           #E8E6E1;
+  --text-muted:     #8B93A1;
+  --text-faint:     #4A5568; /* derived gray, not an accent */
+  --accent:         #5B8DBF;
+  --accent-dim:     rgba(91, 141, 191, 0.12);
+  --accent-hover:   #4A7BA8;
+  --success:        #5FBF77;
+  --success-dim:    rgba(95, 191, 119, 0.12);
+  --pending:        #D9A544;
+  --pending-dim:    rgba(217, 165, 68, 0.12);
+  --danger:         #C4685A;
+  --danger-dim:     rgba(196, 104, 90, 0.12);
+  --new:            #8B93A1;
 
   /* ── Typography ───────────────────────────────────────────── */
   --font-ui:   'Inter', system-ui, sans-serif;
@@ -43,16 +43,11 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
-  /* ── Radius ───────────────────────────────────────────────── */
+  /* ── Radius — spec §2: 6px cards/buttons, 4px tags/badges ──── */
   --radius-sm:   4px;
-  --radius-card: 8px;
+  --radius-card: 6px;
   --radius-tag:  4px;
-  --radius-lg:   12px;
-
-  /* ── Shadows ──────────────────────────────────────────────── */
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg:  0 8px 32px rgba(0,0,0,0.5);
+  --radius-lg:   6px;
 
   /* ── Motion ───────────────────────────────────────────────── */
   --duration-fast:   100ms;

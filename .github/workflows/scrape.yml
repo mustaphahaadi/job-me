@@ -1,4 +1,4 @@
-name: Scrape → Match → Auto-Apply
+name: Scrape → Enrich → Match → Auto-Apply
 
 on:
   schedule:
@@ -33,9 +33,10 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: packages/scraper
 
-      - name: Download active CV from Supabase Storage
-        # Queries cv_versions for the most recently uploaded file_path, then
-        # downloads that exact file. No longer hardcoded to 'resume.pdf'.
+      - name: Download fallback CV from Supabase Storage (optional)
+        # auto-apply downloads each job's role-matched CV itself; this step only
+        # seeds CV_FILE_PATH as a fallback for jobs that match no CV row.
+        # Never fails the run — an empty or missing file just means no fallback.
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -45,18 +46,25 @@ jobs:
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Accept: application/json" \
-            | python3 -c "import sys,json; rows=json.load(sys.stdin); print(rows[0]['file_path'] if rows else 'resume.pdf')")
+            | python3 -c "import sys,json; rows=json.load(sys.stdin); print(rows[0]['file_path'] if rows else '')" || true)
+
+          if [ -z "${CV_FILE_PATH_DB}" ]; then
+            echo "No CV uploaded yet — auto-apply will skip (no file available)."
+            exit 0
+          fi
 
           echo "Resolved CV path from DB: ${CV_FILE_PATH_DB}"
 
-          curl -fsSL \
+          if curl -fsSL \
             "${SUPABASE_URL}/storage/v1/object/cv-files/${CV_FILE_PATH_DB}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -o /tmp/resume.pdf
+            -o /tmp/resume.pdf; then
+            echo "CV_FILE_PATH=/tmp/resume.pdf" >> "$GITHUB_ENV"
+          else
+            echo "CV download failed — the pipeline will retry downloads per job."
+          fi
 
-          echo "CV_FILE_PATH=/tmp/resume.pdf" >> "$GITHUB_ENV"
-
-      - name: Run pipeline (scrape → match → auto-apply)
+      - name: Run pipeline (scrape → enrich → match → auto-apply)
         run: pnpm pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -123,9 +123,6 @@ async function upsertJobs(
     .in('url', urls);
 
   const existingUrlSet = new Set((existing ?? []).map((r: { url: string }) => r.url));
-  const existingById = Object.fromEntries(
-    (existing ?? []).map((r: { id: string; url: string }) => [r.url, r.id])
-  );
 
   const toInsert = validJobs.filter(j => !existingUrlSet.has(j.url));
   const toUpdate = validJobs.filter(j => existingUrlSet.has(j.url));
@@ -148,26 +145,25 @@ async function upsertJobs(
     else console.log(`[scrape] Inserted ${toInsert.length} new job(s).`);
   }
 
-  // 3. Batch update existing jobs — description and posted_date only; never touch status
+  // 3. Batch update existing jobs — description and posted_date only; never touch status.
+  //    One upsert on the unique `url` key instead of N per-row UPDATEs; Postgres only
+  //    SETs columns present in the payload, so status/score columns are untouched.
   if (toUpdate.length > 0) {
-    const BATCH = 20;
-    let updateErrors = 0;
-    for (let i = 0; i < toUpdate.length; i += BATCH) {
-      const slice = toUpdate.slice(i, i + BATCH);
-      const results = await Promise.all(slice.map(u =>
-        supabase.from('jobs').update({
-          description: u.description,
-          posted_date: u.posted_date,
-        }).eq('id', existingById[u.url] as string)
-      ));
-      for (const r of results) {
-        if (r.error) {
-          updateErrors++;
-          console.error(`[scrape] Batch update error: ${String(r.error.message).replace(/[\r\n]/g, ' ')}`);
-        }
-      }
+    const seen = new Set<string>();
+    const rows = toUpdate
+      .filter(u => {
+        if (seen.has(u.url)) return false;
+        seen.add(u.url);
+        return true;
+      })
+      .map(u => ({ url: u.url, description: u.description, posted_date: u.posted_date }));
+
+    const { error: upsertErr } = await supabase.from('jobs').upsert(rows, { onConflict: 'url' });
+    if (upsertErr) {
+      console.error(`[scrape] Batch update error: ${String(upsertErr.message).replace(/[\r\n]/g, ' ')}`);
+    } else {
+      console.log(`[scrape] Updated ${rows.length} existing job(s).`);
     }
-    console.log(`[scrape] Updated ${toUpdate.length - updateErrors} existing job(s)${updateErrors > 0 ? ` (${updateErrors} failed)` : ''}.`);
   }
 }
 

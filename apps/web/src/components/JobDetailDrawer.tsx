@@ -10,8 +10,10 @@ interface Props {
   job: Job | null;
   cvVersions: CvVersion[];
   sourceName?: string | undefined;
+  autoApplyThreshold?: number | undefined;
   onClose: () => void;
   onMarkApplied: (jobId: string) => void;
+  onMarkResponded: (jobId: string) => void;
   onDismiss: (jobId: string) => void;
   onRequeue: (jobId: string) => void;
   onSwapCv: (jobId: string, cvVersionId: string) => void;
@@ -51,7 +53,9 @@ function BreakdownRow({ label, score, weight, detail }: {
   );
 }
 
-function MatchBreakdownSection({ breakdown, totalScore }: { breakdown: MatchBreakdown; totalScore: number }) {
+function MatchBreakdownSection({ breakdown, totalScore, threshold }: {
+  breakdown: MatchBreakdown; totalScore: number; threshold: number;
+}) {
   if (breakdown.negative_keyword_hit) {
     return (
       <div className={styles.section}>
@@ -63,7 +67,7 @@ function MatchBreakdownSection({ breakdown, totalScore }: { breakdown: MatchBrea
     );
   }
 
-  const scoreColor = totalScore >= 0.75 ? 'var(--success)' : totalScore >= 0.50 ? 'var(--accent)' : 'var(--pending)';
+  const scoreColor = totalScore >= threshold ? 'var(--success)' : totalScore >= 0.50 ? 'var(--accent)' : 'var(--pending)';
 
   return (
     <div className={styles.section}>
@@ -78,6 +82,12 @@ function MatchBreakdownSection({ breakdown, totalScore }: { breakdown: MatchBrea
         <BreakdownRow label="Location" score={breakdown.location.score}      weight={breakdown.location.weight}      detail={breakdown.location.accepted ? 'Accepted' : 'Outside accepted'} />
         <BreakdownRow label="Recency"  score={breakdown.recency.score}       weight={breakdown.recency.weight}       detail={breakdown.recency.days_old >= 0 ? `${breakdown.recency.days_old}d old` : 'Date unknown'} />
       </div>
+      <p className={styles.thresholdNote}>
+        Auto-apply threshold: {Math.round(threshold * 100)}% —{' '}
+        {totalScore >= threshold
+          ? 'eligible for auto-apply.'
+          : 'below threshold, manual review required.'}
+      </p>
     </div>
   );
 }
@@ -107,8 +117,8 @@ function CoverLetterSection({ text }: { text: string }) {
 }
 
 export function JobDetailDrawer({
-  job, cvVersions, sourceName, onClose,
-  onMarkApplied, onDismiss, onRequeue, onSwapCv, onDelete,
+  job, cvVersions, sourceName, autoApplyThreshold = 0.75, onClose,
+  onMarkApplied, onMarkResponded, onDismiss, onRequeue, onSwapCv, onDelete,
 }: Props) {
   const drawerRef = useRef<HTMLElement>(null);
 
@@ -198,10 +208,19 @@ export function JobDetailDrawer({
                   id="drawer-mark-applied-btn"
                   className={`${styles.btn} ${styles.btnPrimary}`}
                   onClick={() => onMarkApplied(job.id)}
-                  disabled={job.status === 'auto_applied' || job.status === 'responded' || job.status === 'closed'}
+                  disabled={['auto_applied', 'manual_applied', 'responded', 'closed'].includes(job.status)}
                 >
                   <CheckCheck size={13} /> Mark applied
                 </button>
+                {(job.status === 'auto_applied' || job.status === 'manual_applied') && (
+                  <button
+                    id="drawer-mark-responded-btn"
+                    className={`${styles.btn} ${styles.btnSecondary}`}
+                    onClick={() => onMarkResponded(job.id)}
+                  >
+                    <CheckCheck size={13} /> Mark responded
+                  </button>
+                )}
                 {job.auto_apply_result === 'failed' && (
                   <button id="drawer-requeue-btn" className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => onRequeue(job.id)}>
                     <RotateCcw size={13} /> Re-queue
@@ -229,7 +248,7 @@ export function JobDetailDrawer({
 
             {/* ── Match breakdown ──────────────────────────────────*/}
             {job.match_breakdown ? (
-              <MatchBreakdownSection breakdown={job.match_breakdown} totalScore={job.match_score ?? 0} />
+              <MatchBreakdownSection breakdown={job.match_breakdown} totalScore={job.match_score ?? 0} threshold={autoApplyThreshold} />
             ) : (
               <div className={styles.section}>
                 <p className={styles.mutedText}>Match score pending — queued for next scoring pass.</p>

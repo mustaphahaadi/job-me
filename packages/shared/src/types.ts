@@ -4,10 +4,16 @@ export type JobStatus =
   | 'new'
   | 'matched'
   | 'auto_applied'
+  | 'manual_applied'
   | 'manual_queue'
   | 'responded'
   | 'closed';
 
+/**
+ * The six fixed pipeline stages (spec §3.1) — used by the sidebar.
+ * `manual_applied` is a job-status value but not a separate stage: those jobs
+ * group under `auto_applied` in the sidebar (they have been applied to).
+ */
 export const JOB_STATUSES: JobStatus[] = [
   'new',
   'matched',
@@ -95,18 +101,28 @@ export interface Settings {
   skill_vocabulary?: string[];
 }
 
+/**
+ * Default skill vocabulary — cloud/DevOps domain, kept identical to the seed
+ * value in supabase/schema.sql so a fresh DB and a missing row agree.
+ */
 export const DEFAULT_SKILL_VOCABULARY = [
-  'javascript', 'typescript', 'python', 'java', 'go', 'rust', 'sql',
-  'react', 'node.js', 'rest api', 'graphql', 'html', 'css',
-  'docker', 'kubernetes', 'linux', 'git', 'ci/cd', 'github actions',
-  'aws', 'gcp', 'azure', 'terraform', 'cloud',
-  'postgresql', 'mysql', 'mongodb', 'redis',
-  'testing', 'unit tests', 'agile', 'scrum',
+  'aws', 'ec2', 's3', 'lambda', 'rds', 'vpc', 'iam', 'cloudformation', 'cloudwatch',
+  'eks', 'ecs', 'fargate', 'route53', 'cloudfront',
+  'docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'helm',
+  'ci/cd', 'github actions', 'jenkins', 'gitlab ci', 'circleci',
+  'python', 'bash', 'linux',
+  'devops', 'sre', 'cloud', 'monitoring', 'observability', 'prometheus', 'grafana',
+  'networking', 'load balancer', 'nginx', 'apache',
 ];
 
+/**
+ * Default settings — kept identical to the seed row in supabase/schema.sql
+ * so a fresh DB, an in-memory fallback (scraper without service-role key), and
+ * the Settings page's pre-load state never disagree.
+ */
 export const DEFAULT_SETTINGS: Settings = {
   id: 1,
-  target_roles: ['Software Engineer', 'Backend Engineer', 'Full Stack Engineer'],
+  target_roles: ['Cloud Engineer', 'DevOps Engineer', 'AWS Technical Trainer', 'AWS Instructor', 'Platform Engineer', 'Site Reliability Engineer'],
   days_posted_default: 14,
   auto_apply_score_threshold: 0.75,
   max_auto_apply_per_run: 5,
@@ -134,6 +150,7 @@ export const STATUS_DISPLAY: Record<JobStatus, string> = {
   new: 'NEW',
   matched: 'MATCHED',
   auto_applied: 'AUTO-APPLIED',
+  manual_applied: 'MANUAL-APPLIED',
   manual_queue: 'MANUAL QUEUE',
   responded: 'RESPONDED',
   closed: 'CLOSED',
@@ -143,6 +160,7 @@ export const STATUS_COLOR_VAR: Record<JobStatus, string> = {
   new: 'var(--new)',
   matched: 'var(--accent)',
   auto_applied: 'var(--success)',
+  manual_applied: 'var(--success)',
   manual_queue: 'var(--pending)',
   responded: 'var(--accent)',
   closed: 'var(--text-muted)',
@@ -167,7 +185,7 @@ export function selectCvForTitle(cvs: CvVersion[], jobTitle: string): CvVersion 
 
 /** Returns the index in the pipeline track a given status occupies. */
 export function pipelineIndex(status: JobStatus): number {
-  if (status === 'manual_queue') return 2; // same slot as auto_applied
+  if (status === 'manual_queue' || status === 'manual_applied') return 2; // same slot as auto_applied
   const idx = PIPELINE_TRACK.indexOf(status);
   return idx === -1 ? 0 : idx;
 }
