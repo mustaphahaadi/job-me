@@ -235,8 +235,17 @@ Demonstrate how to clear the database for a fresh scraping run:
 
 ### Option B: From the Terminal
 ```bash
+# Clear jobs and application history:
 pnpm db:clear
+
+# Clear existing job sources as well:
+pnpm db:clear-sources
 ```
+
+### Option C: Reseeding Custom Sources via SQL
+1. Edit the seed list at the bottom of [`supabase/schema.sql`](./supabase/schema.sql).
+2. Run `pnpm db:clear-sources` (or execute `TRUNCATE sources CASCADE;` in Supabase SQL Editor).
+3. Re-run `supabase/schema.sql` in Supabase SQL Editor to seed your custom list of job sources!
 
 ---
 

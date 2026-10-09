@@ -91,6 +91,19 @@ async function clearDb(): Promise<void> {
     console.log('✓ Cleared jobs table');
   }
 
+  if (process.argv.includes('--sources') || process.argv.includes('--all')) {
+    const { error: srcErr } = await supabase
+      .from('sources')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+
+    if (srcErr) {
+      console.error('Failed to clear sources:', String(srcErr.message).replace(/[\r\n]/g, ' '));
+    } else {
+      console.log('✓ Cleared sources table');
+    }
+  }
+
   console.log('=== Database Clear Finished ===');
 }
 

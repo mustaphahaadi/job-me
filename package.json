@@ -9,6 +9,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "pipeline": "pnpm --filter @job-me/scraper start",
-    "db:clear": "pnpm --filter @job-me/scraper db:clear"
+    "db:clear": "pnpm --filter @job-me/scraper db:clear",
+    "db:clear-sources": "pnpm --filter @job-me/scraper db:clear --sources"
   }
 }
