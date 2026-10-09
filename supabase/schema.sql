@@ -263,19 +263,17 @@ INSERT INTO sources (name, type, base_url, query_params, active) VALUES
   ('Arbeitnow — DevOps Remote',   'arbeitnow', 'https://www.arbeitnow.com/api/job-board-api', '{"search": "devops engineer"}'::jsonb,  true),
   ('Arbeitnow — Cloud Engineer',  'arbeitnow', 'https://www.arbeitnow.com/api/job-board-api', '{"search": "cloud engineer"}'::jsonb,   true),
 
-  -- ── LinkedIn: Remote (worldwide) ─────────────────────────────────────────
-  ('LinkedIn — DevOps Remote',           'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",       "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — Cloud Engineer Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",        "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — AWS Instructor Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "aws instructor trainer", "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  -- ── LinkedIn: Remote (Worldwide & Africa Remote) ──────────────────────────
+  ('LinkedIn — DevOps Remote',           'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — Cloud Engineer Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — AWS Instructor Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "aws instructor trainer",    "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — DevOps Lagos (Remote)',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — Cloud Engineer Lagos (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",      "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — SRE Johannesburg (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "site reliability engineer","location": "Johannesburg, South Africa", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
 
-  -- ── LinkedIn: Africa on-site ──────────────────────────────────────────────
-  ('LinkedIn — DevOps Lagos',            'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Lagos, Nigeria",           "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — Cloud Engineer Lagos',    'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Lagos, Nigeria",           "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — DevOps Nairobi',          'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Nairobi, Kenya",           "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — SRE Johannesburg',        'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "site reliability engineer","location": "Johannesburg, South Africa","f_TPR": "r604800"}'::jsonb, true),
+  -- ── LinkedIn: Ghana (On-site & Remote) ───────────────────────────────────
   ('LinkedIn — DevOps Accra',            'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Accra, Ghana",             "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Accra',    'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Accra, Ghana",             "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — IT Infrastructure Ghana', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "it infrastructure",        "location": "Ghana",                    "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — Cloud Engineer Cairo',    'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Cairo, Egypt",             "f_TPR": "r604800"}'::jsonb, true)
+  ('LinkedIn — IT Infrastructure Ghana', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "it infrastructure",        "location": "Ghana",                    "f_TPR": "r604800"}'::jsonb, true)
 
 ON CONFLICT DO NOTHING;

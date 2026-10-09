@@ -238,25 +238,23 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   let locationScore = 0.0;
 
   if (isGhana && ghanaAccepted) {
-    // Top priority: Ghana jobs (both on-site and remote) get full 1.0 score
+    // 1. Ghana jobs (both on-site and remote) get top priority (1.0)
     locationAccepted = true;
     locationScore = 1.0;
   } else if (isRemote && remoteAccepted) {
-    // Remote jobs for Africa/worldwide get 0.95
+    // 2. Foreign remote jobs get 0.95 score
     locationAccepted = true;
     locationScore = 0.95;
-  } else if (locationLower.trim() === '') {
-    // Unspecified location — neutral score (0.5), accepted
+  } else if (locationLower.trim() === '' && remoteAccepted) {
+    // 3. Unspecified location — accepted as neutral (0.5)
     locationAccepted = true;
     locationScore = 0.5;
-  } else if (explicitAccepted) {
-    locationAccepted = true;
-    locationScore = 0.8;
-  } else if (acceptAll) {
+  } else if (explicitAccepted || acceptAll) {
+    // 4. Explicitly accepted foreign location or empty acceptedLocations (accept all)
     locationAccepted = true;
     locationScore = 0.8;
   } else {
-    // On-site outside the accepted list — rejected (remote/Ghana-only by default)
+    // 5. Foreign on-site / hybrid roles (outside Ghana and not remote) when specific location filters are active — Hard Rejected (0.0)
     locationAccepted = false;
     locationScore = 0.0;
   }
