@@ -101,35 +101,38 @@ npx playwright install --with-deps chromium
 
 ## 5. Module 3: Environment Configuration
 
-Create two environment files in your workspace:
+`job-me` simplifies environment setup: non-technical users only need to create a **single environment file** in the repository root directory (`.env` or `.env.local`). Both the frontend web app and the background scraper pipeline automatically inherit, resolve, and map key aliases from this single root file!
 
-### 1. Frontend Environment File: `apps/web/.env.local`
+Create a single file named `.env` or `.env.local` in your project root (`/job-me/.env.local`):
+
 ```env
+# ─── Supabase Configuration ───────────────────────────────────────────────────
+# Copy from Supabase Project Settings → API
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-
-# Required for the "Run now" button on /sources page
-VITE_GITHUB_PAT=github_pat_xxxxxx
-VITE_GITHUB_REPO=YOUR_USERNAME/job-me
-VITE_GITHUB_BRANCH=main
-```
-
-### 2. Scraper Environment File: `packages/scraper/.env`
-```env
-SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# Applicant identity details for Auto-Apply form filling
+# Note: Supabase Dashboard keys SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, and 
+# SUPABASE_SECRET_KEY are also automatically detected and aliased!
+
+# ─── Applicant Information for ATS Auto-Apply ────────────────────────────────
 APPLICANT_FIRST_NAME=Jane
 APPLICANT_LAST_NAME=Doe
 APPLICANT_EMAIL=jane.doe@example.com
 APPLICANT_PHONE=+233201234567
 
-# Optional — Google Gemini API Key for AI cover letters & spam filtering
+# ─── Optional Features ───────────────────────────────────────────────────────
+# Google Gemini API Key for AI cover letters & spam filtering
+# Get free key at: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your-gemini-api-key
 
-# Headless Playwright mode (true = headless in background, false = visible browser)
-PLAYWRIGHT_HEADLESS=true
+# Playwright browser mode (false = watch browser window live in your demo, true = background)
+PLAYWRIGHT_HEADLESS=false
+
+# Optional — Required for the "Run now" button on /sources page
+VITE_GITHUB_PAT=github_pat_xxxxxx
+VITE_GITHUB_REPO=YOUR_USERNAME/job-me
+VITE_GITHUB_BRANCH=main
 ```
 
 ---

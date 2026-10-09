@@ -92,35 +92,34 @@ job-me/
 
 4. Go to **Storage → New bucket**, name it `cv-files`, set it to **Private**
 
-### 3. Create environment files
+### 3. Create single environment file
 
-**`apps/web/.env.local`**
+Create a single `.env` (or `.env.local`) file in the **root directory** of `job-me`. Both the web dashboard and scraper pipeline automatically inherit and resolve all variables from this root file:
+
+**`/.env` or `/.env.local`** (in repository root):
 ```env
+# Supabase Configuration
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-
-# Required for the "Run now" button on /sources — GitHub PAT with
-# repo + workflow scope (or fine-grained with Actions: Read and write)
-VITE_GITHUB_PAT=github_pat_xxxxxx
-VITE_GITHUB_REPO=YOUR_USERNAME/job-me
-VITE_GITHUB_BRANCH=main
-```
-
-**`packages/scraper/.env`**
-```env
-SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
+# Applicant Information for ATS Auto-Apply
 APPLICANT_FIRST_NAME=Jane
 APPLICANT_LAST_NAME=Doe
 APPLICANT_EMAIL=jane.doe@example.com
-APPLICANT_PHONE=+447123456789   # optional
-CV_FILE_PATH=/path/to/your-cv.pdf
+APPLICANT_PHONE=+233201234567
 
-# Optional — enables AI cover letter generation and spam filtering
-# Free tier: 15 req/min, 1M tokens/day
-# Get key: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=
+# Optional — Google Gemini API key for AI cover letters & spam filtering
+# Get free key at: https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=your-gemini-api-key
+
+# Playwright browser mode (false = watch browser live, true = background)
+PLAYWRIGHT_HEADLESS=true
+
+# Optional — Required for the "Run now" button on /sources page
+VITE_GITHUB_PAT=github_pat_xxxxxx
+VITE_GITHUB_REPO=YOUR_USERNAME/job-me
+VITE_GITHUB_BRANCH=main
 ```
 
 ### 4. Run locally
