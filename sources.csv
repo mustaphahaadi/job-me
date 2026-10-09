@@ -1,18 +1,29 @@
-name,type,base_url,query_params,notes
-"Jobicy — DevOps",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""devops"",""count"":""20""}","Verified live. Returns 20 remote DevOps jobs. Fields: jobTitle/companyName/jobGeo/pubDate. Use the Jobicy connector type."
-"Jobicy — AWS",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""aws"",""count"":""20""}","Verified live. Returns AWS-tagged remote jobs including DevOps/Cloud/Solutions Architect roles."
-"Jobicy — Terraform",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""terraform"",""count"":""20""}","Verified live. Returns 20 infra/platform/SRE roles tagged terraform. High signal-to-noise."
-"Jobicy — Kubernetes",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""kubernetes"",""count"":""20""}","Verified live. Returns k8s-tagged roles — SRE, platform, cloud infra."
-"Jobicy — SRE",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""sre"",""count"":""20""}","Verified live. Returns SRE-tagged remote roles worldwide."
-"Jobicy — Infrastructure",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""infrastructure"",""count"":""20""}","Verified live. Returns infra engineer roles — cloud, network, platform."
-"Arbeitnow — DevOps Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""devops engineer""}","Verified live. Enforces remote=true. Good European + worldwide coverage. No API key needed."
-"Arbeitnow — Cloud Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""cloud engineer""}","Verified live. Remote-only cloud engineer roles. European-heavy but includes worldwide."
-"Arbeitnow — Platform Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""platform engineer""}","Verified live. Remote platform engineer roles."
-"Arbeitnow — Site Reliability Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""site reliability engineer""}","Verified live. Remote SRE roles."
-"Arbeitnow — AWS Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""aws engineer""}","Verified live. Remote AWS-focused engineering roles."
-"We Work Remotely — DevOps & Sysadmin",rss,https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss,{},"Verified live. High-quality remote DevOps/SRE/infra roles. Title format: ""Company: Job Title"". RSS connector handles this correctly."
-"We Work Remotely — Programming",rss,https://weworkremotely.com/categories/remote-programming-jobs.rss,{},"Verified live. Broader engineering roles — filter by scoring. Catches cloud/platform/infra roles posted under programming."
-"RemoteOK — DevOps",api,https://remoteok.com/api,"{""tag"":""devops""}","Verified live. Returns ~100 jobs but includes noise (non-English, unrelated). Scoring engine filters these out. First item in array is metadata — ApiConnector skips non-object items automatically."
-"RemoteOK — Cloud",api,https://remoteok.com/api,"{""tag"":""cloud""}","Verified live. ~100 jobs tagged cloud. Mixed quality — scoring filters to relevant roles."
-"RemoteOK — Kubernetes",api,https://remoteok.com/api,"{""tag"":""kubernetes""}","Verified live. ~15 jobs. Higher signal than devops/cloud tags — k8s roles are more specific."
-"Remotive — DevOps & Sysadmin",api,https://remotive.com/api/remote-jobs,"{""category"":""devops-sysadmin"",""limit"":""20""}","Verified live. Returns 18 remote DevOps roles. Clean data, good location field (candidate_required_location). Note: search param does not filter by keyword server-side — rely on scoring."
+name,type,base_url,query_params,active
+"Jobicy — Cloud (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""cloud"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Platform (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""platform"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — AWS (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""aws"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Kubernetes (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""kubernetes"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Infrastructure (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""infrastructure"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Linux (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""linux"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — DevOps (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""devops"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Terraform (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""terraform"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Python (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""python"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — Docker (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""docker"",""count"":""50"",""geo"":""anywhere""}",true
+"Jobicy — SRE (Worldwide)",jobicy,https://jobicy.com/api/v2/remote-jobs,"{""tag"":""sre"",""count"":""50"",""geo"":""anywhere""}",true
+"Arbeitnow — DevOps Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""devops engineer""}",true
+"Arbeitnow — Cloud Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""cloud engineer""}",true
+"Arbeitnow — Platform Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""platform engineer""}",true
+"Arbeitnow — Site Reliability Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""site reliability engineer""}",true
+"Arbeitnow — AWS Engineer Remote",arbeitnow,https://www.arbeitnow.com/api/job-board-api,"{""search"":""aws engineer""}",true
+"We Work Remotely — DevOps & Sysadmin",rss,https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss,{},true
+"We Work Remotely — Programming",rss,https://weworkremotely.com/categories/remote-programming-jobs.rss,{},true
+"Remotive — DevOps",api,https://remotive.com/api/remote-jobs,"{""category"":""devops"",""limit"":""20""}",true
+"RemoteOK — DevOps",api,https://remoteok.com/api,"{""tag"":""devops""}",true
+"RemoteOK — Cloud",api,https://remoteok.com/api,"{""tag"":""cloud""}",true
+"RemoteOK — Kubernetes",api,https://remoteok.com/api,"{""tag"":""kubernetes""}",true
+"LinkedIn — DevOps Remote",linkedin,https://www.linkedin.com/jobs/search,"{""keywords"":""devops engineer"",""location"":""Worldwide"",""f_WT"":""2"",""f_TPR"":""r604800""}",true
+"LinkedIn — Cloud Engineer Remote",linkedin,https://www.linkedin.com/jobs/search,"{""keywords"":""cloud engineer"",""location"":""Worldwide"",""f_WT"":""2"",""f_TPR"":""r604800""}",true
+"LinkedIn — AWS Instructor Remote",linkedin,https://www.linkedin.com/jobs/search,"{""keywords"":""aws instructor trainer"",""location"":""Worldwide"",""f_WT"":""2"",""f_TPR"":""r604800""}",true
+"LinkedIn — DevOps Accra",linkedin,https://www.linkedin.com/jobs/search,"{""keywords"":""devops engineer"",""location"":""Accra, Ghana"",""f_TPR"":""r604800""}",true
+"LinkedIn — Cloud Engineer Accra",linkedin,https://www.linkedin.com/jobs/search,"{""keywords"":""cloud engineer"",""location"":""Accra, Ghana"",""f_TPR"":""r604800""}",true
+"LinkedIn — IT Infrastructure Ghana",linkedin,https://www.linkedin.com/jobs/search,"{""keywords"":""it infrastructure"",""location"":""Ghana"",""f_TPR"":""r604800""}",true
