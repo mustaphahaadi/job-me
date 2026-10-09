@@ -12,8 +12,8 @@ import { WorkdayConnector } from '../auto-apply-connectors/workday.js';
 // ─── Connector registry ───────────────────────────────────────────────────────
 // Add new ATS connectors here. Key = pattern to detect in the job URL.
 const AUTO_APPLY_CONNECTORS: Array<{ pattern: RegExp; connector: AutoApplyConnector }> = [
-  { pattern: /(greenhouse\.io|boards\.greenhouse\.io|job-boards\.greenhouse\.io)/i, connector: new GreenhouseConnector() },
-  { pattern: /(lever\.co|jobs\.lever\.co)/i, connector: new LeverConnector() },
+  { pattern: /(greenhouse\.io|boards\.greenhouse\.io|job-boards\.greenhouse\.io|bamboohr\.com|breezy\.hr|workable\.com)/i, connector: new GreenhouseConnector() },
+  { pattern: /(lever\.co|jobs\.lever\.co|ashbyhq\.com|jobs\.ashbyhq\.com|smartrecruiters\.com)/i, connector: new LeverConnector() },
   { pattern: /(myworkdayjobs\.com|workday\.com|wd\d+\.myworkday\.com)/i, connector: new WorkdayConnector() },
 ];
 

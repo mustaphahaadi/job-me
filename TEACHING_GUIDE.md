@@ -1,7 +1,7 @@
 # job-me — Master Teaching & Student Setup Guide
 
 > **Target Audience**: Students, Workshop Attendees, Software Engineers, and Educators.  
-> **Objective**: Learn how to clone, configure, run 100% locally (without cloud deployment), customize scoring algorithms, test auto-apply, and optionally deploy `job-me` to the cloud.
+> **Objective**: Learn how to clone, configure, run 100% locally (without cloud deployment), customize 5-signal match scoring, test ATS auto-apply with CAPTCHA protection, and optionally deploy `job-me` to the cloud.
 
 ---
 
@@ -9,13 +9,14 @@
 1. [Overview & Architecture](#1-overview--architecture)
 2. [Prerequisites](#2-prerequisites)
 3. [Module 1: Complete Local Setup (Zero Deployment)](#3-module-1-complete-local-setup-zero-deployment)
-4. [Module 2: Database Setup & Seed](#4-module-2-database-setup--seed)
+4. [Module 2: Database Setup & Storage Buckets](#4-module-2-database-setup--storage-buckets)
 5. [Module 3: Environment Configuration](#5-module-3-environment-configuration)
-6. [Module 4: Running the Dashboard & Scraper Locally](#6-module-4-running-the-dashboard--scraper-locally)
-7. [Module 5: Understanding Location Rules & Match Engine](#7-module-5-understanding-location-rules--match-engine)
-8. [Module 6: Auto-Apply Setup & ATS Integration](#8-module-6-auto-apply-setup--ats-integration)
-9. [Module 7: Database Management & Reset](#9-module-7-database-management--reset)
-10. [Module 8: Forking & Cloud Deployment (Vercel + GitHub Actions)](#10-module-8-forking--cloud-deployment-vercel--github-actions)
+6. [Module 4: Source Connectors & Template Placeholders](#6-module-4-source-connectors--template-placeholders)
+7. [Module 5: Running the Dashboard & Scraper Locally](#7-module-5-running-the-dashboard--scraper-locally)
+8. [Module 6: Location Rules & 5-Signal Match Engine](#8-module-6-location-rules--5-signal-match-engine)
+9. [Module 7: Resilient Auto-Apply & ATS Integration](#9-module-7-resilient-auto-apply--ats-integration)
+10. [Module 8: Database Management & Reset](#10-module-8-database-management--reset)
+11. [Module 9: Forking & Cloud Deployment (Vercel + GitHub Actions)](#11-module-9-forking--cloud-deployment-vercel--github-actions)
 
 ---
 
@@ -25,14 +26,21 @@
 
 ```
 job-me/
-├── apps/web/                  # React 18 + Vite SPA (Dashboard UI)
+├── apps/web/                    # React 18 + Vite SPA (Dashboard UI)
 ├── packages/
-│   ├── shared/                # Types, 5-signal match scoring engine, Supabase/Gemini client factories
-│   └── scraper/               # Scraper orchestrator, connectors (RSS, API, LinkedIn), Playwright ATS fillers
+│   ├── shared/                  # Types, 5-signal match engine, Supabase/Gemini factories
+│   └── scraper/                 # Scraper orchestrator, 9 connectors, Playwright ATS fillers
 ├── supabase/
-│   └── schema.sql             # Single-file idempotent Postgres schema
-└── .github/workflows/scrape.yml # 6-hour cron + manual execution pipeline
+│   └── schema.sql               # Single-file idempotent Postgres schema
+└── .github/workflows/
+    └── pipeline.yml             # 6-hour cron + manual execution workflow
 ```
+
+### Core Pipeline Stages:
+1. **Scrape**: Fetches listings across 9 source types using dynamic template placeholders (`{roles}`, `{locations}`, `{days}`) and single-query batch upserts.
+2. **Enrich (AI)**: Google Gemini 1.5 Flash filters spam, recruiters, and verifies remote eligibility.
+3. **Match**: Algorithmic 0–100% match scoring; auto-closes low-match listings (<25%) and foreign on-site roles.
+4. **Auto-Apply**: Playwright Chromium fills Greenhouse/Lever/Workday forms with fail-fast CAPTCHA detection, cached role-matched CV PDFs, and attempt-based rate limits.
 
 ---
 
@@ -40,19 +48,20 @@ job-me/
 
 Before starting the workshop, ensure every student has the following tools installed:
 
-1. **Node.js**: Version `^20.0.0` or `v24.x`. Check with: `node -v`
-2. **pnpm**: Version `^9.0.0`. Install globally via:
+1. **Node.js**: Version `^18.0.0` or `v20.x`/`v22.x`. Verify: `node -v`
+2. **pnpm**: Version `^9.0.0`. Install globally:
    ```bash
    npm install -g pnpm
    ```
-3. **Git**: Installed and configured. Check with: `git --version`
+3. **Git**: Installed and configured. Verify: `git --version`
 4. **Supabase Account**: Free project at [supabase.com](https://supabase.com).
+5. **Google Gemini API Key** *(Optional but recommended)*: Free key from [Google AI Studio](https://aistudio.google.com/app/apikey).
 
 ---
 
 ## 3. Module 1: Complete Local Setup (Zero Deployment)
 
-Students can run the entire platform locally on their laptop without deploying to Vercel or setting up GitHub Actions.
+Students can run the entire platform locally on their laptop without deploying to Vercel or setting up cloud infrastructure.
 
 ### Step 1: Clone the Repository
 ```bash
@@ -72,7 +81,7 @@ npx playwright install --with-deps chromium
 
 ---
 
-## 4. Module 2: Database Setup & Seed
+## 4. Module 2: Database Setup & Storage Buckets
 
 1. Log into your free project at [supabase.com](https://supabase.com).
 2. Go to **Project Settings → API** and copy:
@@ -83,9 +92,9 @@ npx playwright install --with-deps chromium
    - Open [`supabase/schema.sql`](./supabase/schema.sql) in your text editor.
    - Copy all content and paste it into the Supabase SQL Editor.
    - Click **Run**.
-   > *Note*: The schema is idempotent — safe to re-run anytime. It creates all 5 tables (`sources`, `jobs`, `cv_versions`, `applications`, `settings`), RLS policies, indexes, and seeds initial job sources.
+   > *Note*: The schema is idempotent — safe to re-run anytime. It creates all 5 tables (`sources`, `jobs`, `cv_versions`, `applications`, `settings`), RLS policies, indexes, and seeds initial sources.
 4. Go to **Storage → Create a new bucket**:
-   - Bucket name: `cv-files`
+   - Bucket name: `job-me-cvs`
    - Toggle: **Private**
 
 ---
@@ -116,24 +125,45 @@ APPLICANT_LAST_NAME=Doe
 APPLICANT_EMAIL=jane.doe@example.com
 APPLICANT_PHONE=+233201234567
 
-# Optional — fallback CV path, used only for jobs that match no CV row.
-# Auto-apply otherwise downloads each job's role-matched CV from Supabase Storage!
-CV_FILE_PATH=
+# Optional — Google Gemini API Key for AI cover letters & spam filtering
+GEMINI_API_KEY=your-gemini-api-key
 
-# Optional — Google Gemini 2.5 Flash API Key for AI cover letters & spam filtering
-# Get free key at: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=
+# Headless Playwright mode (true = headless in background, false = visible browser)
+PLAYWRIGHT_HEADLESS=true
 ```
 
 ---
 
-## 6. Module 4: Running the Dashboard & Scraper Locally
+## 6. Module 4: Source Connectors & Template Placeholders
+
+`job-me` supports 9 source types out of the box. Sources can contain dynamic template placeholders that automatically pull target settings from your candidate profile:
+
+| Connector Type | Default URL Example | Description |
+|---|---|---|
+| `wellfound` | `https://wellfound.com/jobs` | Startup portal scraper using Playwright auto-scroll. |
+| `yc` | `https://www.workatastartup.com/jobs` | Y Combinator startup job board. |
+| `jobright` | `https://jobright.ai/jobs` | AI job search portal. |
+| `linkedin` | `https://www.linkedin.com/jobs/search?keywords={roles}` | LinkedIn job search connector. |
+| `remotive` | `https://remotive.com/api/remote-jobs?search={roles}` | Remotive REST API connector. |
+| `remoteok` | `https://remoteok.com/api` | RemoteOK API connector. |
+| `weworkremotely` | `https://weworkremotely.com/remote-jobs.rss` | We Work Remotely RSS feed. |
+| `rss` | Custom RSS feed URL | Generic RSS parser. |
+| `generic_web` / `api` | Any custom web page or API | Configurable fallback scraper. |
+
+### Template Placeholders Available:
+- `{roles}` / `{role}`: Substituted with target candidate roles (e.g. `Fullstack, Frontend, Backend`).
+- `{locations}` / `{location}`: Substituted with target candidate locations.
+- `{days}`: Recency window parameter (e.g. `7`).
+
+---
+
+## 7. Module 5: Running the Dashboard & Scraper Locally
 
 ### 1. Start the React Frontend Dashboard
 ```bash
 pnpm dev
 ```
-Open your browser to `http://localhost:5173`. You will see the dark-slate dashboard ready to receive job postings!
+Open your browser to `http://localhost:5173`. You will see the dark-slate dashboard ready to manage listings, sources, and CV versions!
 
 ### 2. Run the Scraper & Pipeline Locally
 In a separate terminal window, execute:
@@ -142,19 +172,19 @@ pnpm pipeline
 ```
 This runs the full 4-stage pipeline locally:
 ```
-scrape → enrich (AI spam filter) → match (5-signal scorer) → auto-apply (Playwright)
+scrape (batch upserts) → enrich (AI spam filter) → match (5-signal scorer) → auto-apply (Playwright)
 ```
 
-### 3. Run Static Checks & Tests
+### 3. Run Static Checks & Vitest Suite
 ```bash
 pnpm typecheck   # Check TypeScript across all workspace packages
-pnpm test        # Run scoring engine unit tests (Vitest)
-pnpm build       # Test production Vite build
+pnpm test        # Run Vitest scoring engine unit tests
+pnpm build       # Validate production build bundle
 ```
 
 ---
 
-## 7. Module 5: Understanding Location Rules & Match Engine
+## 8. Module 6: Location Rules & 5-Signal Match Engine
 
 Teach students how `job-me` scores postings from `0.00–1.00` across 5 weighted signals:
 
@@ -169,30 +199,28 @@ Teach students how `job-me` scores postings from `0.00–1.00` across 5 weighted
 ### Strict Location Rules Enforced
 1. **Ghana Roles (On-site & Remote)**: Accepted with top priority (`locationScore = 1.0`).
 2. **Foreign Remote Roles**: Accepted if location/title explicitly contains Remote keywords (`locationScore = 0.95`).
-3. **Foreign On-site Roles**: **Hard Rejected**. Jobs located in foreign countries (e.g. Melbourne Australia, Madrid Spain, London UK) that are on-site are automatically set to `score = 0` and transitioned to status `'closed'`.
+3. **Foreign On-site Roles**: **Hard Rejected**. Jobs located in foreign countries (e.g. Melbourne Australia, Madrid Spain, London UK) that are on-site are set to `score = 0` and transitioned to status `'closed'`.
 
 ---
 
-## 8. Module 6: Auto-Apply Setup & ATS Integration
+## 9. Module 7: Resilient Auto-Apply & ATS Integration
 
-Auto-apply operates via Playwright headless Chromium on supported ATS platforms:
+Auto-apply operates via Playwright headless Chromium on supported ATS platforms with advanced safety features:
 
-| ATS Platform | URL Pattern Matched |
-|---|---|
-| **Greenhouse** | `greenhouse.io`, `boards.greenhouse.io` |
-| **Lever** | `jobs.lever.co`, `lever.co/` |
-| **Workday** | `myworkdayjobs.com`, `wd3.myworkday.com`, `wd1.myworkday.com` |
+| ATS Platform | URL Pattern Matched | Safety & Features |
+|---|---|---|
+| **Greenhouse** | `greenhouse.io`, `boards.greenhouse.io` | Custom inputs, CV attachment, CAPTCHA protection |
+| **Lever** | `jobs.lever.co`, `lever.co/` | Single-page DOM filler & CV attachment |
+| **Workday** | `myworkdayjobs.com`, `wd3.myworkday.com` | Multi-step portal navigator |
 
-### Steps to Test Auto-Apply:
-1. Upload a PDF CV on the **`/cv`** dashboard page.
-2. Select default roles for your CV version.
-3. Go to **`/settings`** and set the **Auto-apply score threshold** (e.g., 60% or 65%).
-4. Run `pnpm pipeline` locally.
-5. Postings hosted on Greenhouse/Lever/Workday with scores above threshold will auto-submit! Postings on custom/third-party sites move to **Manual Queue** for 1-click manual review.
+### Advanced Safety & Performance Mechanisms:
+1. **Fail-Fast CAPTCHA Detection (`detectCaptcha`)**: Scans pages for hCaptcha, reCAPTCHA, or Cloudflare Turnstile before form submittal; skips gracefully if detected to prevent IP blocking.
+2. **Role-Matched CV Selection & Caching (`ensureCvFile`)**: Resolves candidate CV version matching the job's role category, downloads the PDF from Supabase Storage bucket (`job-me-cvs`) once per run, and caches it locally.
+3. **Attempt-Based Rate Limits (`MAX_PER_RUN`)**: Tracks total submittal *attempts* (successful or failed) to prevent spamming job portals (`MAX_PER_RUN = 10`).
 
 ---
 
-## 9. Module 7: Database Management & Reset
+## 10. Module 8: Database Management & Reset
 
 Demonstrate how to clear the database for a fresh scraping run:
 
@@ -209,9 +237,9 @@ pnpm db:clear
 
 ---
 
-## 10. Module 8: Forking & Cloud Deployment (Vercel + GitHub Actions)
+## 11. Module 9: Forking & Cloud Deployment (Vercel + GitHub Actions)
 
-### Step 1: Fork and Deploy Frontend to Vercel
+### Step 1: Deploy Frontend to Vercel
 1. Fork the repo to your GitHub account.
 2. Log into [vercel.com](https://vercel.com) → **Add New Project** → Import your fork.
 3. Settings:
@@ -219,7 +247,7 @@ pnpm db:clear
    - Root Directory: `apps/web`
    - Build Command: `pnpm --filter @job-me/web build`
    - Output Directory: `dist`
-4. Add Environment Variables:
+4. Environment Variables:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
 5. Click **Deploy**.
@@ -228,4 +256,4 @@ pnpm db:clear
 Go to your fork → **Settings → Secrets and variables → Actions → New repository secret**:
 Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `APPLICANT_FIRST_NAME`, `APPLICANT_LAST_NAME`, `APPLICANT_EMAIL`, and `GEMINI_API_KEY`.
 
-The GitHub Actions workflow (`.github/workflows/scrape.yml`) will now execute automatically every 6 hours!
+The GitHub Actions workflow (`.github/workflows/pipeline.yml`) will execute automatically every 6 hours with zero hosting costs!

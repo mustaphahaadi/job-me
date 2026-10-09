@@ -5,42 +5,54 @@
  * If the key is absent the functions return null gracefully — pipeline continues without AI.
  */
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 /** Hard cap on any single Gemini call — a hung request must not stall the pipeline run. */
 const GEMINI_TIMEOUT_MS = 30_000;
 
 async function callGemini(prompt: string, apiKey: string): Promise<string | null> {
-  try {
-    // API key travels in a header, never in the URL (URLs get logged everywhere).
-    const res = await fetch(GEMINI_API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-      }),
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-    });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(GEMINI_API_BASE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+        }),
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      });
 
-    if (!res.ok) {
-      console.warn(`[ai] Gemini API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')}`);
+      if (res.status === 429 && attempt === 1) {
+        console.warn('[ai] Gemini API rate limit hit (429). Retrying after 6s backoff...');
+        await new Promise(resolve => setTimeout(resolve, 6000));
+        continue;
+      }
+
+      if (!res.ok) {
+        console.warn(`[ai] Gemini API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')}`);
+        return null;
+      }
+
+      const data = (await res.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+
+      return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    } catch (err) {
+      if (attempt === 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[ai] Gemini request failed: ${msg.replace(/[\r\n]/g, ' ')}`);
       return null;
     }
-
-    const data = await res.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[ai] Gemini request failed: ${msg.replace(/[\r\n]/g, ' ')}`);
-    return null;
   }
+  return null;
 }
 
 /**

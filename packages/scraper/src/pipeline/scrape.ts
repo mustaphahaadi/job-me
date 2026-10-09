@@ -163,8 +163,16 @@ async function upsertJobs(
 
   const existingUrlSet = new Set((existing ?? []).map((r: { url: string }) => r.url));
 
-  const toInsert = validJobs.filter(j => !existingUrlSet.has(j.url));
-  const toUpdate = validJobs.filter(j => existingUrlSet.has(j.url));
+  const toInsertRaw = validJobs.filter(j => !existingUrlSet.has(j.url));
+  const toUpdateRaw = validJobs.filter(j => existingUrlSet.has(j.url));
+
+  // Deduplicate new jobs by URL to prevent batch insert key conflicts
+  const seenInsert = new Set<string>();
+  const toInsert = toInsertRaw.filter(j => {
+    if (seenInsert.has(j.url)) return false;
+    seenInsert.add(j.url);
+    return true;
+  });
 
   // 2. Batch insert new jobs
   if (toInsert.length > 0) {
@@ -184,18 +192,25 @@ async function upsertJobs(
     else console.log(`[scrape] Inserted ${toInsert.length} new job(s).`);
   }
 
-  // 3. Batch update existing jobs — description and posted_date only; never touch status.
-  //    One upsert on the unique `url` key instead of N per-row UPDATEs; Postgres only
-  //    SETs columns present in the payload, so status/score columns are untouched.
-  if (toUpdate.length > 0) {
-    const seen = new Set<string>();
-    const rows = toUpdate
+  // 3. Batch update existing jobs — include title, company, source_id, raw_location so Postgres
+  //    upsert constraint doesn't throw NOT NULL violations on title.
+  if (toUpdateRaw.length > 0) {
+    const seenUpdate = new Set<string>();
+    const rows = toUpdateRaw
       .filter(u => {
-        if (seen.has(u.url)) return false;
-        seen.add(u.url);
+        if (seenUpdate.has(u.url)) return false;
+        seenUpdate.add(u.url);
         return true;
       })
-      .map(u => ({ url: u.url, description: u.description, posted_date: u.posted_date }));
+      .map(u => ({
+        url: u.url,
+        title: u.title,
+        company: u.company,
+        source_id: sourceId,
+        raw_location: u.raw_location,
+        description: u.description,
+        posted_date: u.posted_date,
+      }));
 
     const { error: upsertErr } = await supabase.from('jobs').upsert(rows, { onConflict: 'url' });
     if (upsertErr) {

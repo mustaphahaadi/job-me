@@ -11,11 +11,21 @@ import { runAutoApply } from './pipeline/auto-apply.js';
  * Checks packages/scraper/.env, .env (root), and apps/web/.env.local.
  */
 function loadEnv(): void {
+  let curr = process.cwd();
+  let root = curr;
+  while (curr !== path.parse(curr).root) {
+    if (fs.existsSync(path.join(curr, 'pnpm-workspace.yaml')) || fs.existsSync(path.join(curr, 'package.json'))) {
+      root = curr;
+      if (fs.existsSync(path.join(curr, 'pnpm-workspace.yaml'))) break;
+    }
+    curr = path.dirname(curr);
+  }
+
   const envPaths = [
+    path.join(root, '.env.local'),
+    path.join(root, '.env'),
     path.resolve(process.cwd(), 'packages/scraper/.env'),
-    path.resolve(process.cwd(), '.env'),
     path.resolve(process.cwd(), 'apps/web/.env.local'),
-    path.resolve(process.cwd(), '../web/.env.local'),
   ];
 
   for (const envPath of envPaths) {
@@ -36,6 +46,17 @@ function loadEnv(): void {
         }
       }
     }
+  }
+
+  // Key aliases resolution for seamless single-file root configuration
+  if (!process.env['SUPABASE_URL'] && process.env['VITE_SUPABASE_URL']) {
+    process.env['SUPABASE_URL'] = process.env['VITE_SUPABASE_URL'];
+  }
+  if (!process.env['SUPABASE_SERVICE_ROLE_KEY']) {
+    process.env['SUPABASE_SERVICE_ROLE_KEY'] =
+      process.env['SUPABASE_SECRET_KEY'] ||
+      process.env['VITE_SUPABASE_ANON_KEY'] ||
+      process.env['SUPABASE_ANON_KEY'];
   }
 }
 
