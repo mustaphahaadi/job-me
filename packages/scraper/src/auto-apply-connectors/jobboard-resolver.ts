@@ -20,28 +20,97 @@ function findAtsConnector(url: string): AutoApplyConnector | null {
   return null;
 }
 
+const BLOCKED_DOMAINS = [
+  'producthunt.com',
+  'twitter.com',
+  'x.com',
+  'facebook.com',
+  'instagram.com',
+  'youtube.com',
+  'github.com',
+  'gitlab.com',
+  'google.com',
+  'apple.com',
+  'slack.com',
+  'discord.com',
+  'discord.gg',
+  'medium.com',
+  'substack.com',
+  'reddit.com',
+  'play.google.com',
+  'apps.apple.com',
+];
+
+const BLOCKED_PATH_PATTERNS = [
+  /\/privacy/i,
+  /\/legal/i,
+  /\/terms/i,
+  /\/cookie/i,
+  /\/security/i,
+  /\/compliance/i,
+  /\/notice/i,
+  /\/policy/i,
+  /\/help\./i,
+  /\/support\./i,
+  /\/pricing/i,
+  /\/blog/i,
+  /\/about/i,
+  /\/contact/i,
+  /\/press/i,
+  /\/status/i,
+  /\/login/i,
+  /\/signin/i,
+  /\/signup/i,
+  /\/register/i,
+  /\/rss/i,
+  /\/feed/i,
+  /\/api/i,
+];
+
+function isValidApplyUrl(urlStr: string, jobHostname: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    const host = u.hostname.toLowerCase();
+    const pathAndQuery = (u.pathname + u.search).toLowerCase();
+
+    if (BLOCKED_DOMAINS.some(d => host === d || host.endsWith('.' + d))) {
+      return false;
+    }
+    if (BLOCKED_PATH_PATTERNS.some(p => p.test(pathAndQuery))) {
+      return false;
+    }
+    if (host === jobHostname.toLowerCase()) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Selectors for the "Apply" / "Apply for this job" external link on each job board.
- * Order matters — more specific selectors first.
+ * Selectors for the "Apply" / "Apply for this job" link or button on job boards.
+ * More specific selectors first.
  */
-const APPLY_LINK_SELECTORS = [
+const APPLY_SELECTORS = [
   // WeWorkRemotely
+  '#job-cta-alt',
   'a[href][class*="job-action-apply"]',
   'a.wfj-apply-link',
   'a[data-testid*="apply"]',
   // Remotive
   'a.apply-link',
-  'a[href*="apply"]',
   // RemoteOK
   'a.button.action-apply',
+  'a[href^="/l/"]',
   '.job_apply > a',
-  // Jobicy / generic
-  'a[rel="noopener"][target="_blank"][href*="apply"]',
-  // Generic fallbacks
+  // Generic high-confidence apply links with text
   'a:has-text("Apply for this Job")',
-  'a:has-text("Apply Now")',
   'a:has-text("Apply for this position")',
+  'a:has-text("Apply Now")',
   'a:has-text("Apply to this job")',
+  'button:has-text("Apply for this Job")',
+  'button:has-text("Apply Now")',
 ];
 
 /**
@@ -50,11 +119,11 @@ const APPLY_LINK_SELECTORS = [
  * For job-board listing URLs (WeWorkRemotely, Remotive, RemoteOK, Jobicy, etc.)
  * this connector:
  *   1. Navigates to the listing page in a headless browser
- *   2. Extracts the real company / ATS "Apply" URL
+ *   2. Extracts the real company / ATS "Apply" URL (checks known ATS links first)
  *   3. If the ATS URL matches Greenhouse/Lever/Workday → delegates to that connector
  *   4. Otherwise → fills basic info on whatever simple apply form appears
  *
- * Throws on CAPTCHA or when no apply link can be found.
+ * Throws on CAPTCHA or when no valid company apply link can be found.
  */
 export class JobBoardResolverConnector implements AutoApplyConnector {
   async apply(job: Job, cv: CvVersion | null, coverLetter: string | null | undefined, cvFilePath: string): Promise<void> {
@@ -79,42 +148,84 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
       await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForTimeout(2000);
 
-      // ── Step 2: Extract the real apply URL ─────────────────────────────────
+      const jobHostname = new URL(job.url).hostname;
       let applyUrl: string | null = null;
 
-      for (const sel of APPLY_LINK_SELECTORS) {
-        try {
-          const el = await page.$(sel);
-          if (el) {
+      // Check 1: Scan for ANY known ATS link on the page directly (highest accuracy)
+      const allPageLinks = await page.$$eval('a[href]', anchors =>
+        anchors.map(a => (a as HTMLAnchorElement).href)
+      ).catch(() => []);
+
+      const directAtsLink = allPageLinks.find(href => findAtsConnector(href) !== null && isValidApplyUrl(href, jobHostname));
+      if (directAtsLink) {
+        applyUrl = directAtsLink;
+      }
+
+      // Check 2: Try specific apply buttons / links
+      if (!applyUrl) {
+        for (const sel of APPLY_SELECTORS) {
+          try {
+            const el = await page.$(sel);
+            if (!el) continue;
+
             const href = await el.getAttribute('href');
-            if (href && href.startsWith('http') && !href.includes(new URL(job.url).hostname)) {
-              applyUrl = href;
-              break;
+            if (href) {
+              const fullHref = href.startsWith('http') ? href : new URL(href, job.url).href;
+              if (isValidApplyUrl(fullHref, jobHostname)) {
+                applyUrl = fullHref;
+                break;
+              }
             }
+
+            // If relative internal redirect (e.g. /l/123 on RemoteOK) or button, click and see if it navigates or opens popup
+            const [popup] = await Promise.all([
+              page.waitForEvent('popup', { timeout: 6000 }).catch(() => null),
+              el.click().catch(() => null),
+            ]);
+
+            if (popup) {
+              await popup.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => null);
+              const popupUrl = popup.url();
+              if (isValidApplyUrl(popupUrl, jobHostname)) {
+                applyUrl = popupUrl;
+                await popup.close().catch(() => null);
+                break;
+              }
+              await popup.close().catch(() => null);
+            } else {
+              await page.waitForTimeout(3000);
+              const currentUrl = page.url();
+              if (currentUrl !== job.url && isValidApplyUrl(currentUrl, jobHostname)) {
+                applyUrl = currentUrl;
+                break;
+              }
+            }
+          } catch {
+            // try next selector
           }
-        } catch {
-          // selector not found — try next
         }
       }
 
-      // Fallback: collect all external links and pick the most "apply-looking" one
+      // Check 3: Text-based fallback search (only links whose TEXT says "apply" or "application")
       if (!applyUrl) {
-        const links = await page.$$eval('a[href]', (anchors) =>
-          anchors.map(a => ({ href: (a as HTMLAnchorElement).href, text: a.textContent?.trim() ?? '' }))
+        const candidateLinks = await page.$$eval('a[href]', anchors =>
+          anchors.map(a => ({
+            href: (a as HTMLAnchorElement).href,
+            text: (a.textContent ?? '').trim().toLowerCase(),
+          }))
+        ).catch(() => []);
+
+        const candidate = candidateLinks.find(l =>
+          (l.text.includes('apply') || l.text.includes('application')) &&
+          isValidApplyUrl(l.href, jobHostname)
         );
-        const jobHostname = new URL(job.url).hostname;
-        const candidate = links.find(l => {
-          try {
-            const u = new URL(l.href);
-            return u.hostname !== jobHostname &&
-              /apply|application|job|career|position/i.test(l.href + l.text);
-          } catch { return false; }
-        });
-        if (candidate) applyUrl = candidate.href;
+        if (candidate) {
+          applyUrl = candidate.href;
+        }
       }
 
-      if (!applyUrl) {
-        throw new Error(`No external apply link found on ${job.url} — may require login or manual apply.`);
+      if (!applyUrl || !isValidApplyUrl(applyUrl, jobHostname)) {
+        throw new Error(`No valid external apply page found on ${job.url} — moved to manual queue.`);
       }
 
       console.log(`[auto-apply] Resolved apply URL: ${applyUrl.slice(0, 80)}`);
@@ -122,20 +233,18 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
       // ── Step 3: Hand off to ATS connector if we recognise the ATS ──────────
       const atsConnector = findAtsConnector(applyUrl);
       if (atsConnector) {
-        // Temporarily override the job URL so the ATS connector navigates to the right page
         const jobWithAtsUrl = { ...job, url: applyUrl };
         await atsConnector.apply(jobWithAtsUrl as Job, cv, coverLetter, cvFilePath);
         return;
       }
 
-      // ── Step 4: Generic apply — navigate to the apply URL and fill what we can
+      // ── Step 4: Generic apply — navigate to the apply URL and fill form
       await page.goto(applyUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForTimeout(2000);
 
       const captcha = await detectCaptcha(page);
       if (captcha) throw captchaError(captcha);
 
-      // Fill common fields that appear across many simple ATS/career page forms
       const tryFill = async (selector: string, value: string) => {
         const el = await page.$(selector);
         if (el) { await el.fill(value); }
@@ -169,14 +278,13 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
       }
       await submitBtn.click();
 
-      // Wait for any confirmation
+      // Wait for confirmation
       await Promise.any([
         page.waitForSelector('text=Thank you', { timeout: 10_000 }),
         page.waitForSelector('text=submitted', { timeout: 10_000 }),
         page.waitForSelector('text=received', { timeout: 10_000 }),
         page.waitForURL(url => url.href !== applyUrl, { timeout: 10_000 }),
       ]).catch(() => {
-        // No confirmation — that's okay for generic forms, we still count it
         console.warn(`[auto-apply] No confirmation page detected for ${applyUrl?.slice(0, 60)} — submission may still have succeeded.`);
       });
 

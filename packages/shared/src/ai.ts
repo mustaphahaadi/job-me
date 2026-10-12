@@ -10,7 +10,7 @@
 const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1/chat/completions';
 
 /** Default model — cheap and fast, good for classification/generation tasks. */
-const DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
 /** Hard cap on any single AI call — a hung request must not stall the pipeline run. */
 const AI_TIMEOUT_MS = 30_000;
