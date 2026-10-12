@@ -174,7 +174,7 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
         page.waitForSelector('text=Thank you', { timeout: 10_000 }),
         page.waitForSelector('text=submitted', { timeout: 10_000 }),
         page.waitForSelector('text=received', { timeout: 10_000 }),
-        page.waitForURL(url => url !== applyUrl, { timeout: 10_000 }),
+        page.waitForURL(url => url.href !== applyUrl, { timeout: 10_000 }),
       ]).catch(() => {
         // No confirmation — that's okay for generic forms, we still count it
         console.warn(`[auto-apply] No confirmation page detected for ${applyUrl?.slice(0, 60)} — submission may still have succeeded.`);

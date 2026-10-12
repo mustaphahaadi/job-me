@@ -10,6 +10,7 @@ import { IndeedConnector } from '../connectors/indeed.js';
 import { OttaConnector } from '../connectors/otta.js';
 import { GlassdoorConnector } from '../connectors/glassdoor.js';
 import { GenericWebConnector } from '../connectors/generic-web.js';
+import { GreenhouseApiConnector } from '../connectors/greenhouse-api.js';
 import { applySettingsToSource, sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
