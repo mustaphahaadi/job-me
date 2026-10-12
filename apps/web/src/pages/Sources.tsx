@@ -52,7 +52,8 @@ export default function Sources() {
 
   function openEdit(src: Source) {
     setEditId(src.id);
-    setForm({ name: src.name, type: src.type, base_url: src.base_url, query_params: src.query_params, active: src.active });
+    const formType = src.base_url.includes('ashbyhq.com') ? 'ashby' : src.type;
+    setForm({ name: src.name, type: formType, base_url: src.base_url, query_params: src.query_params, active: src.active });
     setParamStr(JSON.stringify(src.query_params, null, 2));
     setShowForm(true);
   }
@@ -75,13 +76,25 @@ export default function Sources() {
       return;
     }
 
-    const payload = { ...form, query_params: params };
+    let payload = { ...form, query_params: params };
     if (editId) {
-      const { data, error } = await supabase.from('sources').update(payload).eq('id', editId).select().single();
+      let { data, error } = await supabase.from('sources').update(payload).eq('id', editId).select().single();
+      if (error && error.code === '23514' && form.type === 'ashby') {
+        payload = { ...payload, type: 'api' };
+        const retry = await supabase.from('sources').update(payload).eq('id', editId).select().single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) { setSaveError(error.message); setSaving(false); return; }
       if (data) setSources(prev => prev.map(s => s.id === editId ? data as Source : s));
     } else {
-      const { data, error } = await supabase.from('sources').insert(payload).select().single();
+      let { data, error } = await supabase.from('sources').insert(payload).select().single();
+      if (error && error.code === '23514' && form.type === 'ashby') {
+        payload = { ...payload, type: 'api' };
+        const retry = await supabase.from('sources').insert(payload).select().single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) { setSaveError(error.message); setSaving(false); return; }
       if (data) setSources(prev => [...prev, data as Source]);
     }
@@ -186,7 +199,9 @@ export default function Sources() {
                 <div className={styles.sourceTop}>
                   <div className={styles.sourceInfo}>
                     <span className={styles.sourceName}>{src.name}</span>
-                    <span className={styles.sourceType}>{src.type.toUpperCase()}</span>
+                    <span className={styles.sourceType}>
+                      {src.base_url.includes('ashbyhq.com') ? 'ASHBY' : src.type.toUpperCase()}
+                    </span>
                   </div>
                   <div className={styles.sourceActions}>
                     <button
@@ -280,10 +295,15 @@ export default function Sources() {
                       if (newType === 'jobicy') setForm(f => ({ ...f, base_url: 'https://jobicy.com/api/v2/remote-jobs' }));
                       else if (newType === 'arbeitnow') setForm(f => ({ ...f, base_url: 'https://www.arbeitnow.com/api/job-board-api' }));
                       else if (newType === 'linkedin') setForm(f => ({ ...f, base_url: 'https://www.linkedin.com/jobs/search' }));
+                      else if (newType === 'greenhouse') setForm(f => ({ ...f, base_url: 'https://boards-api.greenhouse.io/v1/boards/canonical/jobs' }));
+                      else if (newType === 'ashby') setForm(f => ({ ...f, base_url: 'https://api.ashbyhq.com/posting-api/job-board/linear' }));
+                      else if (newType === 'lever') setForm(f => ({ ...f, base_url: 'https://api.lever.co/v0/postings/spotify?mode=json' }));
                     }
                   }}>
                   <option value="generic_web">Generic Web Page / Careers Page (Playwright)</option>
                   <option value="greenhouse">Greenhouse Board API</option>
+                  <option value="ashby">Ashby Board API</option>
+                  <option value="lever">Lever Board API</option>
                   <option value="rss">RSS / Atom Feed</option>
                   <option value="jobicy">Jobicy API</option>
                   <option value="arbeitnow">Arbeitnow API</option>

@@ -91,3 +91,80 @@ export function extractLocationFromText(text: string): string | null {
 
   return null;
 }
+
+/**
+ * Fast pre-filter for ATS and broad board APIs (Greenhouse, Ashby, Lever).
+ * Ensures only jobs matching the user's configured profile (target roles,
+ * technical keywords, and location rules) are stored in the database,
+ * preventing boards with 400+ jobs from flooding the dashboard.
+ */
+export function isJobRelevantToProfile(
+  title: string,
+  rawLocation: string | null | undefined,
+  settings?: import('@job-me/shared').Settings
+): boolean {
+  const titleLower = title.toLowerCase().trim();
+  const locLower = (rawLocation ?? '').toLowerCase().trim();
+
+  // 1. Role / Technical Domain Filter
+  const targetRoles = (settings?.target_roles ?? []).map(r => r.toLowerCase().trim());
+  const defaultDomainKeywords = [
+    'cloud', 'devops', 'sre', 'site reliability', 'platform',
+    'infrastructure', 'infra', 'systems', 'aws', 'linux', 'kubernetes',
+    'k8s', 'terraform', 'reliability', 'trainer', 'instructor',
+    'solutions architect', 'software engineer, infrastructure', 'software engineer, platform',
+    'backend', 'systems engineer'
+  ];
+
+  const hasRoleMatch = targetRoles.some(role => {
+    const words = role.split(/\s+/).filter(Boolean);
+    if (words.length > 1) {
+      return words.some(w => titleLower.includes(w) && w.length > 3);
+    }
+    return titleLower.includes(role);
+  }) || defaultDomainKeywords.some(kw => titleLower.includes(kw));
+
+  if (!hasRoleMatch) return false;
+
+  // Hard exclusions: sales, marketing, hr, legal, recruiter, finance, etc.
+  const EXCLUDED_TITLE_TOKENS = [
+    'account executive', 'sales', 'marketing', 'recruiter', 'recruiting',
+    'talent acquisition', 'legal', 'counsel', 'finance', 'payroll', 'accounting',
+    'office manager', 'customer success', 'customer support', 'business development',
+    'graphic designer', 'copywriter', 'content creator', 'internship', 'intern',
+    'paralegal', 'administrative', 'workforce management', 'workplace operations'
+  ];
+  if (EXCLUDED_TITLE_TOKENS.some(token => titleLower.includes(token))) {
+    return false;
+  }
+
+  // Check negative keywords from settings
+  if (settings?.negative_keywords && settings.negative_keywords.length > 0) {
+    if (settings.negative_keywords.some(neg => titleLower.includes(neg.toLowerCase().trim()))) {
+      return false;
+    }
+  }
+
+  // 2. Strict Location Policy:
+  // - Ghana: on-site & remote allowed
+  // - Outside Ghana: strictly remote!
+  const isGhana = ['ghana', 'accra', 'kumasi', 'tema'].some(k =>
+    locLower.includes(k) || titleLower.includes(k)
+  );
+
+  if (isGhana) return true;
+
+  // Outside Ghana: reject if explicitly hybrid or in-office
+  const ONSITE_HYBRID = ['hybrid', 'in-office', 'in office', 'on-site', 'onsite', 'office-based'];
+  if (ONSITE_HYBRID.some(k => locLower.includes(k) || titleLower.includes(k))) {
+    return false;
+  }
+
+  // Outside Ghana: MUST be remote / worldwide / anywhere / work from home
+  const REMOTE_TOKENS = [
+    'remote', 'worldwide', 'anywhere', 'work from home', 'wfh',
+    'global', 'telecommute', 'home based', 'distributed', 'virtual', 'emea'
+  ];
+  return REMOTE_TOKENS.some(k => locLower.includes(k) || titleLower.includes(k));
+}
+

@@ -11,6 +11,8 @@ import { OttaConnector } from '../connectors/otta.js';
 import { GlassdoorConnector } from '../connectors/glassdoor.js';
 import { GenericWebConnector } from '../connectors/generic-web.js';
 import { GreenhouseApiConnector } from '../connectors/greenhouse-api.js';
+import { AshbyApiConnector } from '../connectors/ashby-api.js';
+import { LeverApiConnector } from '../connectors/lever-api.js';
 import { applySettingsToSource, sanitizeLog } from '../connectors/utils.js';
 import type { Connector } from '../connectors/base.js';
 
@@ -65,7 +67,7 @@ async function scrapeSource(supabase: SupabaseClient, source: Source, settings: 
 
   try {
     const connector = getConnector(enrichedSource);
-    const jobs = await connector.fetch(enrichedSource);
+    const jobs = await connector.fetch(enrichedSource, settings);
 
     console.log(`[scrape] ${sanitizeLog(source.name)}: fetched ${jobs.length} job(s).`);
 
@@ -223,6 +225,9 @@ async function upsertJobs(
 }
 
 function getConnector(source: Source): Connector {
+  if (source.type === 'greenhouse' || source.base_url.includes('greenhouse.io')) return new GreenhouseApiConnector();
+  if (source.type === 'ashby' || source.base_url.includes('ashbyhq.com')) return new AshbyApiConnector();
+  if (source.type === 'lever' || source.base_url.includes('lever.co')) return new LeverApiConnector();
   if (source.type === 'rss') return new RssConnector();
   if (source.type === 'api') return new ApiConnector();
   if (source.type === 'arbeitnow') return new ArbeitnowConnector();
@@ -232,7 +237,6 @@ function getConnector(source: Source): Connector {
   if (source.type === 'otta') return new OttaConnector();
   if (source.type === 'glassdoor') return new GlassdoorConnector();
   if (source.type === 'generic_web') return new GenericWebConnector();
-  if (source.type === 'greenhouse') return new GreenhouseApiConnector();
   throw new Error(`Unknown source type: ${source.type}`);
 }
 

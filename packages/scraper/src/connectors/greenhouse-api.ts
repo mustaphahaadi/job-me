@@ -1,6 +1,6 @@
-import type { Source, NormalizedJob } from '@job-me/shared';
+import type { Source, NormalizedJob, Settings } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { buildUrl } from './utils.js';
+import { buildUrl, isJobRelevantToProfile } from './utils.js';
 
 type GreenhouseJob = {
   id?: number;
@@ -18,17 +18,12 @@ type GreenhouseJob = {
  * Endpoint format: https://boards-api.greenhouse.io/v1/boards/{company}/jobs
  * Returns JSON: { jobs: [{ title, absolute_url, location, updated_at, ... }] }
  *
- * The `absolute_url` field already points directly to the Greenhouse application
- * page (boards.greenhouse.io or job-boards.greenhouse.io), so the auto-apply
- * Greenhouse connector can handle these jobs without any URL resolution.
- *
- * Usage in sources table:
- *   type: 'greenhouse'
- *   base_url: 'https://boards-api.greenhouse.io/v1/boards/{company-slug}/jobs'
- *   query_params: {} (or {"content": "true"} to include full description)
+ * Automatically filters against user profile settings (target roles and location)
+ * so only relevant positions are scraped, preventing boards with 400+ jobs from
+ * flooding the database.
  */
 export class GreenhouseApiConnector implements Connector {
-  async fetch(source: Source): Promise<NormalizedJob[]> {
+  async fetch(source: Source, settings?: Settings): Promise<NormalizedJob[]> {
     const url = buildUrl(source.base_url, source.query_params as Record<string, string>);
 
     const res = await fetch(url, {
@@ -46,13 +41,17 @@ export class GreenhouseApiConnector implements Connector {
     const jobs: GreenhouseJob[] = data.jobs ?? [];
 
     return jobs
-      .filter(j => j.absolute_url && j.title)
+      .filter(j => {
+        if (!j.absolute_url || !j.title) return false;
+        const loc = j.location?.name ?? '';
+        return isJobRelevantToProfile(j.title, loc, settings);
+      })
       .map((j): NormalizedJob => ({
         title: (j.title ?? '').trim() || 'Untitled Job',
         company: extractCompanyFromUrl(source.base_url),
         url: j.absolute_url!,
         posted_date: j.updated_at ? j.updated_at.split('T')[0]! : null,
-        description: null, // Full description requires ?content=true — costly, skip for now
+        description: null,
         raw_location: j.location?.name ?? 'Remote',
         raw_tags: j.departments?.map(d => d.name ?? '').filter(Boolean) ?? [],
       }));

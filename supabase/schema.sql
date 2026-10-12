@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS sources (
 -- Enforce allowed connector types (idempotent: drops and re-adds)
 ALTER TABLE sources DROP CONSTRAINT IF EXISTS sources_type_check;
 ALTER TABLE sources ADD CONSTRAINT sources_type_check
-  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta', 'generic_web', 'greenhouse', 'lever'));
+  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta', 'generic_web', 'greenhouse', 'lever', 'ashby'));
 
 -- Backfill column for databases that pre-date migration 0003
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS consecutive_fail_count int NOT NULL DEFAULT 0;
@@ -276,16 +276,18 @@ INSERT INTO sources (name, type, base_url, query_params, active) VALUES
   ('LinkedIn — Cloud Engineer Accra',    'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Accra, Ghana",             "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — IT Infrastructure Ghana', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "it infrastructure",        "location": "Ghana",                    "f_TPR": "r604800"}'::jsonb, true),
 
-  -- ── Greenhouse API — direct ATS sources (auto-apply ready) ───────────────
-  -- These return absolute_url pointing to boards.greenhouse.io so the
-  -- GreenhouseConnector can auto-apply without any extra URL resolution step.
-  -- Tested & verified reachable on 2026-10-12.
-  ('Greenhouse — Cloudflare', 'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs', '{}'::jsonb, true),
-  ('Greenhouse — Datadog',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/datadog/jobs',    '{}'::jsonb, true),
-  ('Greenhouse — MongoDB',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/mongodb/jobs',    '{}'::jsonb, true),
-  ('Greenhouse — Twilio',     'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/twilio/jobs',     '{}'::jsonb, true),
-  ('Greenhouse — PagerDuty',  'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/pagerduty/jobs',  '{}'::jsonb, true),
+  -- ── Greenhouse API — direct ATS sources (pre-filtered by profile) ────────
+  ('Greenhouse — Canonical',  'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/canonical/jobs',  '{}'::jsonb, true),
+  ('Greenhouse — GitLab',     'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/gitlab/jobs',     '{}'::jsonb, true),
   ('Greenhouse — Stripe',     'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/stripe/jobs',     '{}'::jsonb, true),
-  ('Greenhouse — Elastic',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/elastic/jobs',    '{}'::jsonb, true)
+  ('Greenhouse — Elastic',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/elastic/jobs',    '{}'::jsonb, true),
+
+  -- ── Ashby API — direct ATS sources (pre-filtered by profile) ─────────────
+  ('Ashby — Linear',          'ashby',      'https://api.ashbyhq.com/posting-api/job-board/linear',       '{}'::jsonb, true),
+  ('Ashby — Replit',          'ashby',      'https://api.ashbyhq.com/posting-api/job-board/replit',       '{}'::jsonb, true),
+  ('Ashby — Cursor',          'ashby',      'https://api.ashbyhq.com/posting-api/job-board/cursor',       '{}'::jsonb, true),
+
+  -- ── Lever API — direct ATS sources (pre-filtered by profile) ──────────────
+  ('Lever — Spotify',         'lever',      'https://api.lever.co/v0/postings/spotify?mode=json',          '{}'::jsonb, true)
 
 ON CONFLICT DO NOTHING;
