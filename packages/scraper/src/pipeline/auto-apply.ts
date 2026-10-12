@@ -8,13 +8,20 @@ import type { AutoApplyConnector } from '../auto-apply-connectors/base.js';
 import { GreenhouseConnector } from '../auto-apply-connectors/greenhouse.js';
 import { LeverConnector } from '../auto-apply-connectors/lever.js';
 import { WorkdayConnector } from '../auto-apply-connectors/workday.js';
+import { JobBoardResolverConnector } from '../auto-apply-connectors/jobboard-resolver.js';
 
 // ─── Connector registry ───────────────────────────────────────────────────────
 // Add new ATS connectors here. Key = pattern to detect in the job URL.
+//
+// Order matters — specific ATS patterns first, job-board resolver last so it
+// catches anything that comes from a listing page (WeWorkRemotely, LinkedIn, etc.)
 const AUTO_APPLY_CONNECTORS: Array<{ pattern: RegExp; connector: AutoApplyConnector }> = [
+  // Direct ATS application pages
   { pattern: /(greenhouse\.io|boards\.greenhouse\.io|job-boards\.greenhouse\.io|bamboohr\.com|breezy\.hr|workable\.com)/i, connector: new GreenhouseConnector() },
   { pattern: /(lever\.co|jobs\.lever\.co|ashbyhq\.com|jobs\.ashbyhq\.com|smartrecruiters\.com)/i, connector: new LeverConnector() },
   { pattern: /(myworkdayjobs\.com|workday\.com|wd\d+\.myworkday\.com)/i, connector: new WorkdayConnector() },
+  // Job-board listing pages — resolver visits the page and extracts the real apply URL
+  { pattern: /(weworkremotely\.com|remoteok\.com|remoteok\.io|remotive\.com|remotive\.io|jobicy\.com|wellfound\.com|angel\.co|otta\.com|arbeitnow\.com|nodesk\.co|linkedin\.com|dev\.to)/i, connector: new JobBoardResolverConnector() },
 ];
 
 function findConnector(jobUrl: string): AutoApplyConnector | null {
