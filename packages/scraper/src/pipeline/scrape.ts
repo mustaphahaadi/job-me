@@ -232,6 +232,7 @@ function getConnector(source: Source): Connector {
   if (source.type === 'otta') return new OttaConnector();
   if (source.type === 'glassdoor') return new GlassdoorConnector();
   if (source.type === 'generic_web') return new GenericWebConnector();
+  if (source.type === 'greenhouse') return new GreenhouseApiConnector();
   throw new Error(`Unknown source type: ${source.type}`);
 }
 

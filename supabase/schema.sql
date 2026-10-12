@@ -274,6 +274,18 @@ INSERT INTO sources (name, type, base_url, query_params, active) VALUES
   -- ── LinkedIn: Ghana (On-site & Remote) ───────────────────────────────────
   ('LinkedIn — DevOps Accra',            'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Accra, Ghana",             "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Accra',    'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Accra, Ghana",             "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — IT Infrastructure Ghana', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "it infrastructure",        "location": "Ghana",                    "f_TPR": "r604800"}'::jsonb, true)
+  ('LinkedIn — IT Infrastructure Ghana', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "it infrastructure",        "location": "Ghana",                    "f_TPR": "r604800"}'::jsonb, true),
+
+  -- ── Greenhouse API — direct ATS sources (auto-apply ready) ───────────────
+  -- These return absolute_url pointing to boards.greenhouse.io so the
+  -- GreenhouseConnector can auto-apply without any extra URL resolution step.
+  -- Tested & verified reachable on 2026-10-12.
+  ('Greenhouse — Cloudflare', 'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs', '{}'::jsonb, true),
+  ('Greenhouse — Datadog',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/datadog/jobs',    '{}'::jsonb, true),
+  ('Greenhouse — MongoDB',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/mongodb/jobs',    '{}'::jsonb, true),
+  ('Greenhouse — Twilio',     'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/twilio/jobs',     '{}'::jsonb, true),
+  ('Greenhouse — PagerDuty',  'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/pagerduty/jobs',  '{}'::jsonb, true),
+  ('Greenhouse — Stripe',     'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/stripe/jobs',     '{}'::jsonb, true),
+  ('Greenhouse — Elastic',    'greenhouse', 'https://boards-api.greenhouse.io/v1/boards/elastic/jobs',    '{}'::jsonb, true)
 
 ON CONFLICT DO NOTHING;
