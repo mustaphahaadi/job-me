@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS sources (
 -- Enforce allowed connector types (idempotent: drops and re-adds)
 ALTER TABLE sources DROP CONSTRAINT IF EXISTS sources_type_check;
 ALTER TABLE sources ADD CONSTRAINT sources_type_check
-  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta', 'generic_web'));
+  CHECK (type IN ('api', 'rss', 'arbeitnow', 'jobicy', 'linkedin', 'indeed', 'glassdoor', 'otta', 'generic_web', 'greenhouse', 'lever'));
 
 -- Backfill column for databases that pre-date migration 0003
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS consecutive_fail_count int NOT NULL DEFAULT 0;
@@ -267,9 +267,9 @@ INSERT INTO sources (name, type, base_url, query_params, active) VALUES
   ('LinkedIn — DevOps Remote',           'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — AWS Instructor Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "aws instructor trainer",    "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — DevOps Lagos (Remote)',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — Cloud Engineer Lagos (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",      "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — SRE Johannesburg (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "site reliability engineer","location": "Johannesburg, South Africa", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — DevOps Lagos (Remote)',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer remote",   "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — Cloud Engineer Lagos (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer remote",   "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — SRE South Africa (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "site reliability engineer remote", "location": "South Africa", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
 
   -- ── LinkedIn: Ghana (On-site & Remote) ───────────────────────────────────
   ('LinkedIn — DevOps Accra',            'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Accra, Ghana",             "f_TPR": "r604800"}'::jsonb, true),

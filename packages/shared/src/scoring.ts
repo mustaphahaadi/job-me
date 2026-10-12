@@ -210,10 +210,70 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     }
   }
 
-  // ── Location (driven by settings.accepted_locations) ───────────────────
+  // ── Location (Ghana: on-site & remote; Everywhere else: strictly remote) ──
   const fullTextLower = `${titleLower} ${descLower} ${locationLower}`;
-  const isGhana  = GHANA_KEYWORDS.some(k => fullTextLower.includes(k));
-  const isRemote = REMOTE_KEYWORDS.some(k => hasWholeWord(fullTextLower, k));
+
+  const isGhana = GHANA_KEYWORDS.some(k =>
+    locationLower.includes(k) ||
+    hasWholeWord(titleLower, k) ||
+    (locationLower.trim() === '' && fullTextLower.includes(k))
+  );
+
+  const ONSITE_OR_HYBRID_TOKENS = [
+    'hybrid',
+    'on-site',
+    'onsite',
+    'on site',
+    'in-office',
+    'in office',
+    'office-based',
+    'office based',
+  ];
+
+  const hasOnsiteOrHybridIndicator = ONSITE_OR_HYBRID_TOKENS.some(token =>
+    locationLower.includes(token) || hasWholeWord(titleLower, token)
+  );
+
+  const REMOTE_TITLE_OR_LOC_TOKENS = [
+    'remote',
+    'worldwide',
+    'anywhere',
+    'global',
+    'emea',
+    'work from home',
+    'wfh',
+    'telecommute',
+    'distributed',
+    'virtual',
+  ];
+
+  const EXPLICIT_REMOTE_DESC_PHRASES = [
+    '100% remote',
+    'fully remote',
+    'remote position',
+    'remote role',
+    'remote job',
+    'remote opportunity',
+    'remote work',
+    'work remotely',
+    'work from home',
+    'work from anywhere',
+    'remote-first',
+    'remote first',
+    'all-remote',
+    'all remote',
+    'remote eligible',
+  ];
+
+  const hasRemoteInTitleOrLoc = REMOTE_TITLE_OR_LOC_TOKENS.some(k =>
+    hasWholeWord(locationLower, k) || hasWholeWord(titleLower, k)
+  );
+
+  const hasExplicitRemoteInDesc = EXPLICIT_REMOTE_DESC_PHRASES.some(phrase =>
+    descLower.includes(phrase)
+  );
+
+  const isRemote = (hasRemoteInTitleOrLoc || hasExplicitRemoteInDesc) && !hasOnsiteOrHybridIndicator;
 
   // Empty list = accept all locations (matches the Settings page copy).
   const acceptAll = acceptedLocations.length === 0;
@@ -223,15 +283,10 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     const l = loc.toLowerCase().trim();
     return l !== '' && GHANA_SETTINGS_KEYS.some(k => l.includes(k));
   });
+
   const remoteAccepted = acceptAll || acceptedLocations.some(loc => {
     const l = loc.toLowerCase().trim();
     return l !== '' && REMOTE_SETTINGS_KEYS.some(k => l.includes(k));
-  });
-  // Direct string match against non-family entries, e.g. "nigeria" in "Lagos, Nigeria"
-  const explicitAccepted = acceptedLocations.some(loc => {
-    const l = loc.toLowerCase().trim();
-    if (l === '' || REMOTE_SETTINGS_KEYS.some(k => l.includes(k)) || GHANA_SETTINGS_KEYS.some(k => l.includes(k))) return false;
-    return locationLower.includes(l);
   });
 
   let locationAccepted = false;
@@ -241,22 +296,21 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     // 1. Ghana jobs (both on-site and remote) get top priority (1.0)
     locationAccepted = true;
     locationScore = 1.0;
-  } else if (isRemote && remoteAccepted) {
-    // 2. Foreign remote jobs get 0.95 score
-    locationAccepted = true;
-    locationScore = 0.95;
-  } else if (locationLower.trim() === '' && remoteAccepted) {
-    // 3. Unspecified location — accepted as neutral (0.5)
-    locationAccepted = true;
-    locationScore = 0.5;
-  } else if (explicitAccepted || acceptAll) {
-    // 4. Explicitly accepted foreign location or empty acceptedLocations (accept all)
-    locationAccepted = true;
-    locationScore = 0.8;
-  } else {
-    // 5. Foreign on-site / hybrid roles (outside Ghana and not remote) when specific location filters are active — Hard Rejected (0.0)
-    locationAccepted = false;
-    locationScore = 0.0;
+  } else if (!isGhana) {
+    // 2. Strict policy: all jobs outside Ghana (in Africa or worldwide) MUST be remote.
+    // Non-Ghana on-site or hybrid roles are strictly rejected.
+    if (isRemote && remoteAccepted) {
+      locationAccepted = true;
+      locationScore = 0.95;
+    } else if (locationLower.trim() === '' && !hasOnsiteOrHybridIndicator && remoteAccepted) {
+      // Unspecified location without on-site indicator — accepted as neutral
+      locationAccepted = true;
+      locationScore = 0.5;
+    } else {
+      // Any non-Ghana job that is on-site, hybrid, or not verified remote is strictly rejected.
+      locationAccepted = false;
+      locationScore = 0.0;
+    }
   }
 
   // ── Recency ───────────────────────────────────────────────────────────

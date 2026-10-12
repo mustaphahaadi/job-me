@@ -283,6 +283,7 @@ export default function Sources() {
                     }
                   }}>
                   <option value="generic_web">Generic Web Page / Careers Page (Playwright)</option>
+                  <option value="greenhouse">Greenhouse Board API</option>
                   <option value="rss">RSS / Atom Feed</option>
                   <option value="jobicy">Jobicy API</option>
                   <option value="arbeitnow">Arbeitnow API</option>

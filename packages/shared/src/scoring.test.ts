@@ -145,22 +145,73 @@ describe('scoreJob', () => {
     expect(result.breakdown.seniority.detected_level).toBe(null);
   });
 
-  it('treats an empty accepted-locations list as accept-all (per Settings copy)', () => {
-    const londonJob: NormalizedJob = {
+  it('rejects foreign on-site jobs (e.g. South Africa, London) even with empty accepted-locations list', () => {
+    const johannesburgOnsiteJob: NormalizedJob = {
       ...baseJob,
-      title: 'DevOps Engineer',
-      raw_location: 'London, United Kingdom',
-      description: 'On-site in London with AWS and Terraform.',
+      title: 'Site Reliability Engineer',
+      raw_location: 'Johannesburg, Gauteng, South Africa',
+      description: 'On-site position in central Johannesburg office.',
     };
 
-    const result = scoreJob(londonJob, {
-      targetRoles: ['DevOps Engineer'],
+    const result = scoreJob(johannesburgOnsiteJob, {
+      targetRoles: ['Site Reliability Engineer'],
       acceptedLocations: [],
     });
 
+    expect(result.breakdown.location.accepted).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('rejects South Africa on-site jobs even when South Africa is in accepted locations', () => {
+    const saOnsiteJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Site Reliability Engineer',
+      raw_location: 'Johannesburg, Gauteng, South Africa',
+      description: 'Onsite role supporting infrastructure.',
+    };
+
+    const result = scoreJob(saOnsiteJob, {
+      targetRoles: ['Site Reliability Engineer'],
+      acceptedLocations: ['South Africa', 'Johannesburg', 'remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('rejects South Africa hybrid jobs', () => {
+    const saHybridJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Site Reliability Engineer (Hybrid)',
+      raw_location: 'Johannesburg, South Africa',
+      description: 'Hybrid position: 3 days in office, 2 days remote.',
+    };
+
+    const result = scoreJob(saHybridJob, {
+      targetRoles: ['Site Reliability Engineer'],
+      acceptedLocations: ['South Africa', 'remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('accepts South Africa remote jobs', () => {
+    const saRemoteJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Site Reliability Engineer (Remote)',
+      raw_location: 'Johannesburg, South Africa',
+      description: 'Fully remote role for candidates based in South Africa.',
+    };
+
+    const result = scoreJob(saRemoteJob, {
+      targetRoles: ['Site Reliability Engineer'],
+      acceptedLocations: ['South Africa', 'remote'],
+    });
+
     expect(result.breakdown.location.accepted).toBe(true);
-    expect(result.breakdown.location.score).toBe(0.8);
-    expect(result.score).toBeGreaterThan(0);
+    expect(result.breakdown.location.score).toBe(0.95);
+    expect(result.score).toBeGreaterThan(0.5);
   });
 
   it('rejects remote jobs when remote is not in accepted locations', () => {
