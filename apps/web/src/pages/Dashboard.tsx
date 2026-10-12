@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Trash2, Clock, CheckSquare, Square, X } from 'lucide-react';
 import type { Job, JobStatus, Source, CvVersion, Settings } from '@job-me/shared';
-import { selectCvForTitle, MATCH_PROMOTION_THRESHOLD } from '@job-me/shared';
+import { selectCvForTitle, MATCH_PROMOTION_THRESHOLD, scoreJob, optionsFromSettings } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
 import { PipelineSidebar } from '../components/PipelineSidebar';
 import { FilterBar, type FilterState } from '../components/FilterBar';
@@ -9,18 +9,24 @@ import { JobCard } from '../components/JobCard';
 import { JobDetailDrawer } from '../components/JobDetailDrawer';
 import styles from './Dashboard.module.css';
 
-/** Page size for the job list — the dashboard loads the newest window and
- *  extends it on demand instead of pulling the whole table. */
-const PAGE_SIZE = 200;
-
-async function fetchJobsPage(offset: number): Promise<Job[]> {
-  const { data, error } = await supabase
-    .from('jobs')
-    .select('*')
-    .order('scraped_at', { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
-  if (error) throw error;
-  return (data ?? []) as Job[];
+/** Fetch all jobs from Supabase across chunks to remove pagination limits. */
+async function fetchAllJobs(): Promise<Job[]> {
+  const all: Job[] = [];
+  const chunkSize = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('scraped_at', { ascending: false })
+      .range(offset, offset + chunkSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...(data as Job[]));
+    if (data.length < chunkSize) break;
+    offset += chunkSize;
+  }
+  return all;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -108,8 +114,6 @@ export default function Dashboard() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [autoApplyThreshold, setAutoApplyThreshold] = useState(0.75);
 
   // ── Selection state ───────────────────────────────────────────
@@ -122,22 +126,52 @@ export default function Dashboard() {
     void (async () => {
       setLoading(true);
       try {
-        const [firstPage, sourcesRes, cvRes, settingsRes] = await Promise.all([
-          fetchJobsPage(0),
+        const [rawJobs, sourcesRes, cvRes, settingsRes] = await Promise.all([
+          fetchAllJobs(),
           supabase.from('sources').select('*').order('name'),
           supabase.from('cv_versions').select('*').order('uploaded_at', { ascending: false }),
           supabase.from('settings').select('*').eq('id', 1).single(),
         ]);
-        setJobs(firstPage);
-        setHasMore(firstPage.length === PAGE_SIZE);
+
+        const settings = settingsRes.data ? (settingsRes.data as Settings) : null;
+        const scoringOptions = settings ? optionsFromSettings(settings) : null;
+
+        // Ensure every job in memory has its match score calculated so cards are never unscored
+        const scoredJobs = rawJobs.map(job => {
+          if (job.match_score !== null && job.match_score !== undefined) return job;
+          if (!scoringOptions) return job;
+          const scored = scoreJob(
+            {
+              title: job.title,
+              company: job.company,
+              url: job.url,
+              posted_date: job.posted_date,
+              description: job.description,
+              raw_location: job.raw_location,
+              raw_tags: [],
+            },
+            scoringOptions
+          );
+          return {
+            ...job,
+            match_score: scored.score,
+            match_breakdown: scored.breakdown,
+            matched_keywords: [
+              ...scored.breakdown.title_match.matched_keywords,
+              ...scored.breakdown.skills_overlap.matched_skills,
+            ],
+          };
+        });
+
+        setJobs(scoredJobs);
+
         if (sourcesRes.data) {
           setSources(sourcesRes.data as Source[]);
           const times = (sourcesRes.data as Source[]).map(s => s.last_scraped_at).filter(Boolean) as string[];
           if (times.length > 0) setLastRunAt(times.sort().reverse()[0] ?? null);
         }
         if (cvRes.data) setCvVersions(cvRes.data as CvVersion[]);
-        if (settingsRes.data) {
-          const settings = settingsRes.data as Settings;
+        if (settings) {
           setFilters(f => ({ ...f, maxDaysOld: settings.days_posted_default }));
           setAutoApplyThreshold(settings.auto_apply_score_threshold ?? 0.75);
         }
@@ -146,23 +180,6 @@ export default function Dashboard() {
       }
     })();
   }, []);
-
-  const loadMoreJobs = useCallback(async () => {
-    setLoadingMore(true);
-    try {
-      const more = await fetchJobsPage(jobs.length);
-      setJobs(prev => {
-        const seen = new Set(prev.map(j => j.id)); // realtime may have prepended some already
-        return [...prev, ...more.filter(j => !seen.has(j.id))];
-      });
-      setHasMore(more.length === PAGE_SIZE);
-    } catch (err) {
-      console.error('[loadMoreJobs]', err);
-      alert('Failed to load more jobs.');
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [jobs.length]);
 
   // ── Realtime ──────────────────────────────────────────────────
   useEffect(() => {
@@ -202,7 +219,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('[handleDeleteJob]', err);
       alert('Failed to delete job.');
-      fetchJobsPage(0).then(page => { setJobs(page); setHasMore(page.length === PAGE_SIZE); }).catch(console.error);
+      fetchAllJobs().then(setJobs).catch(console.error);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJob]);
@@ -219,7 +236,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('[handleBulkDelete]', err);
       alert('Some jobs failed to delete.');
-      fetchJobsPage(0).then(page => { setJobs(page); setHasMore(page.length === PAGE_SIZE); }).catch(console.error);
+      fetchAllJobs().then(setJobs).catch(console.error);
     } finally {
       setBulkDeleting(false);
       setSelectMode(false);
@@ -240,7 +257,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('[handleDeleteUnmatched]', err);
       alert('Failed to delete jobs.');
-      fetchJobsPage(0).then(page => { setJobs(page); setHasMore(page.length === PAGE_SIZE); }).catch(console.error);
+      fetchAllJobs().then(setJobs).catch(console.error);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs]);
@@ -518,16 +535,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
-
-              {hasMore && (
-                <button
-                  className={styles.loadMoreBtn}
-                  onClick={loadMoreJobs}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? 'Loading…' : `Load more jobs (${jobs.length} loaded)`}
-                </button>
-              )}
             </>
           )}
         </div>

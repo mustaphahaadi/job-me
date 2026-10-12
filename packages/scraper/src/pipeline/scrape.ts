@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@job-me/shared';
 import type { Source, NormalizedJob, Settings } from '@job-me/shared';
-import { getOrInitSettings } from '@job-me/shared';
+import { getOrInitSettings, scoreJob, optionsFromSettings, MATCH_PROMOTION_THRESHOLD } from '@job-me/shared';
+import type { JobStatus } from '@job-me/shared';
 import { RssConnector } from '../connectors/rss.js';
 import { ApiConnector } from '../connectors/api.js';
 import { ArbeitnowConnector } from '../connectors/arbeitnow.js';
@@ -72,7 +73,7 @@ async function scrapeSource(supabase: SupabaseClient, source: Source, settings: 
     console.log(`[scrape] ${sanitizeLog(source.name)}: fetched ${jobs.length} job(s).`);
 
     if (jobs.length > 0) {
-      await upsertJobs(supabase, source.id, jobs);
+      await upsertJobs(supabase, source.id, jobs, settings);
     }
 
     // Update source: success — reset consecutive fail count
@@ -151,11 +152,13 @@ function settingsDerivedParams(type: Source['type'], settings: Settings): Record
 async function upsertJobs(
   supabase: SupabaseClient,
   sourceId: string,
-  jobs: NormalizedJob[]
+  jobs: NormalizedJob[],
+  settings?: Settings
 ): Promise<void> {
   const validJobs = jobs.filter(j => j.url);
   if (validJobs.length === 0) return;
 
+  const scoringOptions = settings ? optionsFromSettings(settings) : null;
   const urls = validJobs.map(j => j.url);
 
   // 1. Fetch existing URLs in one query
@@ -177,22 +180,49 @@ async function upsertJobs(
     return true;
   });
 
-  // 2. Batch insert new jobs
+  // 2. Batch insert new jobs with immediate scoring
   if (toInsert.length > 0) {
-    const rows = toInsert.map(job => ({
-      source_id: sourceId,
-      title: job.title,
-      company: job.company,
-      url: job.url,
-      posted_date: job.posted_date,
-      description: job.description,
-      raw_location: job.raw_location,
-      status: 'new',
-      matched_keywords: [],
-    }));
+    const rows = toInsert.map(job => {
+      let score: number | null = null;
+      let breakdown: any = null;
+      let matchedKeywords: string[] = [];
+      let initialStatus: JobStatus = 'new';
+
+      if (scoringOptions) {
+        const scored = scoreJob(job, scoringOptions);
+        score = scored.score;
+        breakdown = scored.breakdown;
+        matchedKeywords = [
+          ...scored.breakdown.title_match.matched_keywords,
+          ...scored.breakdown.skills_overlap.matched_skills,
+        ];
+        const isMatched = score >= MATCH_PROMOTION_THRESHOLD && scored.breakdown.location.accepted;
+        const isLowScore = score < 0.25;
+        if (scored.breakdown.negative_keyword_hit || !scored.breakdown.location.accepted || isLowScore) {
+          initialStatus = 'closed';
+        } else if (isMatched) {
+          initialStatus = 'matched';
+        }
+      }
+
+      return {
+        source_id: sourceId,
+        title: job.title,
+        company: job.company,
+        url: job.url,
+        posted_date: job.posted_date,
+        description: job.description,
+        raw_location: job.raw_location,
+        status: initialStatus,
+        match_score: score,
+        match_breakdown: breakdown,
+        matched_keywords: matchedKeywords,
+      };
+    });
+
     const { error } = await supabase.from('jobs').insert(rows);
     if (error) console.error(`[scrape] Batch insert error: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
-    else console.log(`[scrape] Inserted ${toInsert.length} new job(s).`);
+    else console.log(`[scrape] Inserted and scored ${toInsert.length} new job(s).`);
   }
 
   // 3. Batch update existing jobs — include title, company, source_id, raw_location so Postgres

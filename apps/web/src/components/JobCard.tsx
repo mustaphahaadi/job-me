@@ -84,6 +84,22 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
             {job.company && <span className={styles.company}>{job.company}</span>}
           </div>
           <div className={styles.tagSlot}>
+            {scorePct !== null ? (
+              <span
+                className={styles.scoreBadge}
+                style={{
+                  color: scoreColor,
+                  borderColor: scoreColor,
+                  background: `color-mix(in srgb, ${scoreColor} 12%, transparent)`,
+                }}
+              >
+                {scorePct}% Match
+              </span>
+            ) : (
+              <span className={styles.scoreBadgeUnscored}>
+                0% Match
+              </span>
+            )}
             <StatusTag status={job.status} />
           </div>
         </div>

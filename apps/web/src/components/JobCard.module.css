@@ -64,8 +64,34 @@
 }
 
 .tagSlot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   flex-shrink: 0;
   padding-top: 1px;
+}
+
+.scoreBadge {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-tag);
+  border: 1px solid;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.scoreBadgeUnscored {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tag);
+  padding: 2px 7px;
+  white-space: nowrap;
 }
 
 /* ── Tag group ────────────────────────────────────────────────*/
