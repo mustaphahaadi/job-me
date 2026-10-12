@@ -75,6 +75,8 @@ jobs:
           APPLICANT_LAST_NAME: ${{ secrets.APPLICANT_LAST_NAME }}
           APPLICANT_EMAIL: ${{ secrets.APPLICANT_EMAIL }}
           APPLICANT_PHONE: ${{ secrets.APPLICANT_PHONE }}
-          # Optional: enables AI cover letter generation and spam filtering
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Optional: enables AI cover letter generation and spam filtering (OpenRouter)
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional: override the default model (e.g. openai/gpt-4o-mini)
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
 

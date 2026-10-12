@@ -5,7 +5,7 @@ import { sanitizeLog } from '../connectors/utils.js';
 /**
  * Enrich pipeline step — runs between scrape and match.
  *
- * For each 'new' job with a description, calls Gemini to:
+ * For each 'new' job with a description, calls the AI (via OpenRouter) to:
  *   1. Detect spam / fake postings → immediately close them
  *   2. Confirm remote status → set raw_location to 'Remote' when empty
  *
@@ -14,12 +14,12 @@ import { sanitizeLog } from '../connectors/utils.js';
  * re-enriched each run), and AI-generated wording inflated the skills signal
  * during scoring. The description stays exactly what the source published.
  *
- * Gracefully skips if GEMINI_API_KEY is not set — pipeline continues unaffected.
- * Rate-limited to avoid hitting Gemini free tier limits.
+ * Gracefully skips if OPENROUTER_API_KEY is not set — pipeline continues unaffected.
+ * Rate-limited to stay within free-tier request budgets.
  */
 export async function runEnrich(supabase: SupabaseClient): Promise<void> {
-  if (!process.env['GEMINI_API_KEY']) {
-    console.log('[enrich] GEMINI_API_KEY not set — skipping AI enrichment.');
+  if (!process.env['OPENROUTER_API_KEY']) {
+    console.log('[enrich] OPENROUTER_API_KEY not set — skipping AI enrichment.');
     return;
   }
 
@@ -36,7 +36,7 @@ export async function runEnrich(supabase: SupabaseClient): Promise<void> {
     return;
   }
 
-  console.log(`[enrich] Enriching ${jobs.length} job(s) via Gemini.`);
+  console.log(`[enrich] Enriching ${jobs.length} job(s) via OpenRouter.`);
 
   let enriched = 0;
   let spamClosed = 0;

@@ -24,6 +24,12 @@ const parser = new Parser<Record<string, unknown>, RssItem>({
   customFields: {
     item: ['dc:date', 'categories', 'region', 'country', 'job:location'],
   },
+  // Some feeds (e.g. Y Combinator) return 406 when the default node User-Agent is sent.
+  // Using a standard browser UA avoids this without changing the parsing logic.
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'application/rss+xml, application/atom+xml, text/xml, application/xml, */*',
+  },
 });
 
 /**

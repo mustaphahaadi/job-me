@@ -83,7 +83,7 @@ async function main(): Promise<void> {
   const start = Date.now();
 
   await runScrape(supabase);
-  await runEnrich(supabase);   // AI: spam filter + remote detection (skipped if no GEMINI_API_KEY)
+  await runEnrich(supabase);   // AI: spam filter + remote detection (skipped if no OPENROUTER_API_KEY)
   await runMatch(supabase);
   await runAutoApply(supabase);
 

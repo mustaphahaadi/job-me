@@ -1,63 +1,80 @@
 /**
- * Gemini AI client — uses gemini-2.5-flash (Google AI Studio free tier).
+ * AI client — uses OpenRouter (OpenAI-compatible API).
  *
- * Set GEMINI_API_KEY in the scraper .env / GitHub Actions secrets.
+ * Set OPENROUTER_API_KEY in the scraper .env / GitHub Actions secrets.
+ * Optionally set OPENROUTER_MODEL to override the default model.
+ *
  * If the key is absent the functions return null gracefully — pipeline continues without AI.
  */
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1/chat/completions';
 
-/** Hard cap on any single Gemini call — a hung request must not stall the pipeline run. */
-const GEMINI_TIMEOUT_MS = 30_000;
+/** Default model — cheap and fast, good for classification/generation tasks. */
+const DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
 
-async function callGemini(prompt: string, apiKey: string): Promise<string | null> {
+/** Hard cap on any single AI call — a hung request must not stall the pipeline run. */
+const AI_TIMEOUT_MS = 30_000;
+
+async function callOpenRouter(prompt: string, apiKey: string): Promise<string | null> {
+  const model = process.env['OPENROUTER_MODEL'] ?? DEFAULT_MODEL;
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const res = await fetch(GEMINI_API_BASE, {
+      const res = await fetch(OPENROUTER_API_BASE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://github.com/mustaphahaadi/job-me',
+          'X-Title': 'job-me pipeline',
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.4,
+          max_tokens: 512,
         }),
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+        signal: AbortSignal.timeout(AI_TIMEOUT_MS),
       });
 
       if (res.status === 429 && attempt === 1) {
-        console.warn('[ai] Gemini API rate limit hit (429). Retrying after 6s backoff...');
+        console.warn('[ai] OpenRouter rate limit hit (429). Retrying after 6s backoff...');
         await new Promise(resolve => setTimeout(resolve, 6000));
         continue;
       }
 
       if (!res.ok) {
-        console.warn(`[ai] Gemini API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')}`);
+        const body = await res.text().catch(() => '');
+        console.warn(`[ai] OpenRouter API error: ${res.status} ${String(res.statusText).replace(/[\r\n]/g, ' ')} — ${body.slice(0, 200).replace(/[\r\n]/g, ' ')}`);
         return null;
       }
 
       const data = (await res.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        choices?: Array<{ message?: { content?: string | null } }>;
       };
 
-      return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+      return data.choices?.[0]?.message?.content?.trim() ?? null;
     } catch (err) {
       if (attempt === 1) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[ai] Gemini request failed: ${msg.replace(/[\r\n]/g, ' ')}`);
+      console.warn(`[ai] OpenRouter request failed: ${msg.replace(/[\r\n]/g, ' ')}`);
       return null;
     }
   }
   return null;
 }
 
+/** Resolves the API key from env — supports OPENROUTER_API_KEY (primary) and legacy GEMINI_API_KEY (ignored). */
+function getApiKey(): string | null {
+  return process.env['OPENROUTER_API_KEY'] ?? null;
+}
+
 /**
  * Generates a concise, tailored cover letter for a job posting.
- * Returns null if GEMINI_API_KEY is not set or the API call fails.
+ * Returns null if OPENROUTER_API_KEY is not set or the API call fails.
  */
 export async function generateCoverLetter(params: {
   jobTitle: string;
@@ -68,7 +85,7 @@ export async function generateCoverLetter(params: {
   targetRoles: string[];
   skillVocabulary: string[];
 }): Promise<string | null> {
-  const apiKey = process.env['GEMINI_API_KEY'];
+  const apiKey = getApiKey();
   if (!apiKey) return null;
 
   const { jobTitle, company, jobDescription, applicantName, applicantEmail, targetRoles, skillVocabulary } = params;
@@ -96,7 +113,7 @@ Requirements:
 - Do NOT use placeholder text like [Your Name] — use the actual applicant name
 - Plain text only, no markdown`;
 
-  return callGemini(prompt, apiKey);
+  return callOpenRouter(prompt, apiKey);
 }
 
 /**
@@ -105,7 +122,7 @@ Requirements:
  * summaries were being prepended on every run (stacking) and AI-generated text
  * inflated the skills signal during scoring.
  *
- * Returns null if GEMINI_API_KEY is not set or the API call fails.
+ * Returns null if OPENROUTER_API_KEY is not set or the API call fails.
  */
 export async function enrichJobDescription(params: {
   title: string;
@@ -114,7 +131,7 @@ export async function enrichJobDescription(params: {
   isRemote: boolean;
   isSpam: boolean;
 } | null> {
-  const apiKey = process.env['GEMINI_API_KEY'];
+  const apiKey = getApiKey();
   if (!apiKey) return null;
 
   const descSnippet = params.description.slice(0, 1000).replace(/\s+/g, ' ');
@@ -130,7 +147,7 @@ Respond with exactly this JSON structure:
   "isSpam": true or false (true if this is a recruiter spam post, MLM, unpaid, or not a real job)
 }`;
 
-  const raw = await callGemini(prompt, apiKey);
+  const raw = await callOpenRouter(prompt, apiKey);
   if (!raw) return null;
 
   try {
