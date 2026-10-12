@@ -1,409 +1,465 @@
 # job-me
 
-A self-hosted job application pipeline. Fork it, configure it for yourself, and let it run every 6 hours on GitHub Actions — scraping job boards, scoring every posting against your skillset, generating AI cover letters, and auto-applying to Greenhouse, Lever, and Workday roles.
+> **An autonomous, self-hosted job application pipeline and personal tracking dashboard.**  
+> Scrapes 9 job board sources, scores postings against your exact technical profile using a 5-signal algorithm, filters spam with Google Gemini AI, generates tailored cover letters, and auto-applies to ATS systems (Greenhouse, Lever, Workday) using Playwright — all running 24/7 for **$0 hosting cost**.
 
 ```
-scrape → enrich (AI spam filter) → match (5-signal score) → auto-apply (AI cover letter)
++------------+     +--------------+     +-------------+     +----------------+
+| 1. SCRAPE  | --> |  2. ENRICH   | --> |  3. MATCH   | --> | 4. AUTO-APPLY  |
+| 9 boards   |     | Gemini AI    |     | 5 signals   |     | Playwright ATS |
+| & feeds    |     | Spam filter  |     | 0%-100% fit |     | & CV upload    |
++------------+     +--------------+     +-------------+     +----------------+
 ```
 
 ---
 
-## What it does
+## Workshop and Setup Navigation
 
-- Scrapes 9 job board types on a 6-hour cron (RSS, API, generic web, LinkedIn, Indeed, Glassdoor, Otta, Jobicy, Arbeitnow)
-- Scores every job `0–100%` using a 5-signal algorithm (title, skills, seniority, location, recency)
-- Filters spam and confirms remote status using Gemini AI (free tier, optional)
-- Auto-applies to Greenhouse, Lever, and Workday roles above your score threshold
-- Generates a tailored AI cover letter per application
-- Dashboard to review, filter, dismiss, bulk-delete, and manually apply to jobs
-- Full applications history with method, CV used, and score
+Follow this guide step-by-step for post-presentation workshops and deployment:
 
-> 📚 **Teaching & Workshop Guide**: Planning to teach or demonstrate `job-me` to students or team members? See the complete step-by-step [**TEACHING_GUIDE.md**](./TEACHING_GUIDE.md) for a zero-deployment local walkthrough.
-
----
-
-## Stack
-
-| Layer | Tech |
-|---|---|
-| Frontend | React 18, React Router v6, CSS Modules |
-| Backend | Supabase (Postgres + RLS + Storage + Realtime) |
-| Scraper | Node.js, Playwright (Chromium), rss-parser |
-| AI | Google Gemini 2.5 Flash (free tier) |
-| CI/CD | GitHub Actions (6-hour cron + manual trigger) |
-| Hosting | Vercel (frontend) |
-| Package manager | pnpm workspaces |
+1. [Platform Overview](#platform-overview)
+2. [Architecture and Hosting Specifications](#architecture-and-hosting-specifications)
+3. [System Prerequisites (Linux and Windows)](#system-prerequisites-linux-and-windows)
+4. [Track A: Local Setup Guide (Zero Cloud Deployment)](#track-a-local-setup-guide-zero-cloud-deployment)
+5. [Track B: Cloud Deployment Guide (24/7 Automation)](#track-b-cloud-deployment-guide-247-automation)
+6. [Environment Variables Reference (.env.local)](#environment-variables-reference-envlocal)
+7. [Platform Logic and Scoring Engine](#platform-logic-and-scoring-engine)
+8. [Dashboard Structure and User Workflow](#dashboard-structure-and-user-workflow)
+9. [Commands and Database Maintenance Reference](#commands-and-database-maintenance-reference)
+10. [Troubleshooting and Platform FAQ](#troubleshooting-and-platform-faq)
 
 ---
 
-## Project structure
+## Platform Overview
+
+Job hunting burnout is driven by three frictions:
+1. **The Time Sink:** Re-typing your name, contact details, and uploading CVs to repetitive Greenhouse, Lever, and Workday forms.
+2. **Information Fatigue:** Sifting through recruiter spam, ghost listings, and duplicate postings across dozens of boards.
+3. **Location Mismatch:** Spending time applying to international roles only to get auto-rejected because they require non-sponsored on-site presence.
+
+**`job-me` solves this with an end-to-end autonomous engine:**
+- **Automated Discovery:** Scrapes listings every 6 hours across 9 source types (RSS, APIs, LinkedIn, RemoteOK, Jobicy, Arbeitnow, generic web pages).
+- **Intelligent 5-Signal Scoring:** Evaluates title match, skill overlap, seniority, location eligibility, and recency on a calibrated scale (0% to 100%).
+- **Strict Location Engine:** Gives Ghana and African roles top priority (1.0), accepts verified remote foreign roles (0.95), and hard-rejects foreign on-site roles (0.0 -> Closed).
+- **Automated Submissions:** Playwright Chromium fills out application forms, attaches the correct role-matched PDF CV, and writes a tailored AI cover letter.
+- **Fail-Safe Routing:** Automatically routes CAPTCHA-protected or non-standard roles to a **Manual Queue** for 1-click review.
+
+---
+
+## Architecture and Hosting Specifications
+
+| Layer | Technology | Hosting & Cost |
+|---|---|---|
+| **Frontend Dashboard** | React 18, React Router v6, CSS Modules, Lucide Icons | **Vercel** — Free tier ($0) |
+| **Database & Storage** | Supabase (PostgreSQL + Row Level Security + Storage Buckets + Realtime) | **Supabase** — Free tier ($0) |
+| **Automation Pipeline** | Node.js, Playwright (Chromium), `rss-parser` | **GitHub Actions** — 6-hour cron ($0) |
+| **AI Intelligence** | Google Gemini 2.5 Flash (Spam detection & cover letters) | **Google AI Studio** — Free tier ($0) |
+| **Monorepo Tooling** | TypeScript, pnpm workspaces, Vitest | Local machine ($0) |
 
 ```
 job-me/
-├── apps/web/                        # Vite + React 18 dashboard
-│   └── src/
-│       ├── components/              # AppShell, JobCard, Drawer, FilterBar, etc.
-│       ├── pages/                   # Dashboard, Sources, Applications, CV, Settings
-│       ├── lib/                     # supabase.ts, github.ts
-│       └── styles/                  # tokens.css, global.css
-├── packages/
-│   ├── shared/src/                  # Types, scoring engine, Supabase client, Gemini client
-│   └── scraper/src/
-│       ├── connectors/              # rss, api, linkedin, indeed, glassdoor, otta, jobicy, arbeitnow
-│       ├── auto-apply-connectors/   # greenhouse, lever, workday
-│       └── pipeline/                # scrape → enrich → match → auto-apply
-├── supabase/
-│   ├── config.toml                  # Supabase local dev config
-│   └── schema.sql                   # Single-file idempotent schema (tables + RLS + seed)
-└── .github/workflows/scrape.yml     # 6-hour cron pipeline
+|-- apps/web/                    -> React 18 + Vite SPA dashboard
+|-- packages/
+|   |-- shared/                  -> Scoring engine, domain types, Supabase & Gemini clients
+|   `-- scraper/                 -> 4-stage pipeline, 9 connectors, Playwright ATS form-fillers
+|-- supabase/
+|   |-- schema.sql               -> Single-file idempotent database schema & seed data
+|   `-- functions/               -> Optional trigger-pipeline edge function
+`-- .github/workflows/
+    `-- scrape.yml               -> 6-hour cron and manual dispatch GitHub Actions pipeline
 ```
 
 ---
 
-## Quick start (local dev)
+## System Prerequisites (Linux and Windows)
 
-### Prerequisites
+Ensure your operating system meets the requirements below.
 
-- Node.js `^20` or `v24`
-- pnpm `^9` — `npm install -g pnpm`
-- A Supabase project (free tier is fine)
-
-### 1. Clone or Fork
-
-- **To run 100% locally (for learning, local testing, or teaching)**:
+### 1. Node.js (v20.x or v24.x)
+- **Linux (Ubuntu/Debian):**
   ```bash
-  git clone https://github.com/YOUR_USERNAME/job-me.git
-  cd job-me
-  pnpm install
+  # Check current version
+  node -v
+
+  # If not installed or below v20, install via NodeSource or NVM:
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt-get install -y nodejs
   ```
-- **To deploy automated 6-hour runs on GitHub Actions**:
-  Click **Fork** on GitHub (top-right of this repo) and clone your fork.
+- **Linux (Fedora/RHEL):**
+  ```bash
+  sudo dnf install -y nodejs
+  ```
+- **Windows:**
+  - Verify in PowerShell or Command Prompt: `node -v`
+  - If not installed, download from [nodejs.org](https://nodejs.org) or install via `winget`:
+    ```powershell
+    winget install OpenJS.NodeJS.LTS
+    ```
 
-### 2. Set up Supabase
-
-1. Create a project at [supabase.com](https://supabase.com) (free tier works)
-2. Go to **Project Settings → API** and note:
-   - Project URL
-   - Anon key
-   - Service Role key
-3. Go to **SQL Editor**, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and click **Run**
-
-   The schema is fully **idempotent** — safe to run on a fresh or existing database. It creates all tables, RLS policies, indexes, and seeds default job sources automatically.
-
-4. Go to **Storage → New bucket**, name it `cv-files`, set it to **Private**
-
-### 3. Create single environment file
-
-Create a single `.env` (or `.env.local`) file in the **root directory** of `job-me`. Both the web dashboard and scraper pipeline automatically inherit and resolve all variables from this root file:
-
-**`/.env` or `/.env.local`** (in repository root):
-```env
-# Supabase Configuration
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-
-# Applicant Information for ATS Auto-Apply
-APPLICANT_FIRST_NAME=Jane
-APPLICANT_LAST_NAME=Doe
-APPLICANT_EMAIL=jane.doe@example.com
-APPLICANT_PHONE=+233201234567
-
-# Optional — Google Gemini API key for AI cover letters & spam filtering
-# Get free key at: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your-gemini-api-key
-
-# Playwright browser mode (false = watch browser live, true = background)
-PLAYWRIGHT_HEADLESS=true
-
-# Optional — Required for the "Run now" button on /sources page
-VITE_GITHUB_PAT=github_pat_xxxxxx
-VITE_GITHUB_REPO=YOUR_USERNAME/job-me
-VITE_GITHUB_BRANCH=main
+### 2. Package Manager (pnpm ^9.0.0)
+Install `pnpm` globally on either operating system:
+```bash
+npm install -g pnpm
+pnpm -v
 ```
 
-### 4. Run locally
+### 3. Git
+- **Linux:** `sudo apt-get install -y git` (or distribution package manager).
+- **Windows:** Download from [git-scm.com](https://git-scm.com) or run `winget install Git.Git`.
+
+### 4. Supabase & Google Gemini Accounts
+- **Supabase Account:** Free tier project at [supabase.com](https://supabase.com).
+- **Google Gemini API Key:** Optional free key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+
+---
+
+## Track A: Local Setup Guide (Zero Cloud Deployment)
+
+Run the entire system locally on your laptop without setting up cloud servers or deploying to Vercel.
+
+### Step 1: Clone the Repository
+
+**Linux (Bash / Zsh):**
+```bash
+git clone https://github.com/mustaphahaadi/job-me.git
+cd job-me
+```
+
+**Windows (PowerShell / Command Prompt):**
+```powershell
+git clone https://github.com/mustaphahaadi/job-me.git
+cd job-me
+```
+
+---
+
+### Step 2: Install Monorepo Dependencies
+
+Run from the root directory on either Linux or Windows:
+```bash
+pnpm install
+```
+
+---
+
+### Step 3: Install Playwright Chromium
+
+Playwright requires Chromium binaries and operating system shared libraries to control web forms:
+
+**Linux (Ubuntu / Debian):**
+```bash
+# Installs Chromium and required OS libraries (libnss3, libasound2, etc.)
+npx playwright install --with-deps chromium
+```
+*Note for Linux users without sudo:* If `--with-deps` prompts for administrative privileges you do not possess, run `npx playwright install chromium`. Ensure baseline desktop libraries are present.
+
+**Windows (PowerShell):**
+```powershell
+npx playwright install chromium
+```
+
+---
+
+### Step 4: Configure Supabase Database and Storage
+
+1. Log into your [Supabase Dashboard](https://supabase.com/dashboard) and select your project.
+2. Navigate to **Project Settings -> API** and copy:
+   - **Project URL** (format: `https://[project-ref].supabase.co`)
+   - **anon / public key**
+   - **service_role key** (secret key granting pipeline write access)
+3. Open the **SQL Editor** in Supabase:
+   - Open [`supabase/schema.sql`](./supabase/schema.sql) in this repository.
+   - Copy the entire SQL content, paste it into the SQL Editor, and click **Run**.  
+   *Note: The schema is fully idempotent. It safely creates all 5 tables (`sources`, `jobs`, `cv_versions`, `applications`, `settings`), indexes, Row Level Security policies, and initial job sources.*
+4. Create the CV Storage Bucket:
+   - Go to **Storage -> New Bucket**.
+   - Bucket name: `cv-files` (must be exact).
+   - Set Privacy to: **Private**.
+   - Click **Save bucket**.
+
+---
+
+### Step 5: Configure the Single Root Environment File (.env.local)
+
+`job-me` resolves all keys for both the web frontend and scraper pipeline from a **single file in the project root**.
+
+**Linux (Bash):**
+```bash
+cp .env.example .env.local
+nano .env.local  # or open in your preferred editor
+```
+
+**Windows (PowerShell):**
+```powershell
+Copy-Item .env.example .env.local
+notepad .env.local
+```
+
+Populate `.env.local` with your configuration:
+
+```env
+# --- Supabase Database and Storage -------------------------------------------
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+
+# --- Applicant Information (Used by Playwright for ATS form filling) ---------
+APPLICANT_FIRST_NAME=Mustapha
+APPLICANT_LAST_NAME=Haadi
+APPLICANT_EMAIL=mustapha.haadi@example.com
+APPLICANT_PHONE=+233548367637
+
+# --- Google Gemini AI (Optional - Free Tier) ---------------------------------
+# Obtain free key at: https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=your-gemini-api-key-here
+
+# --- Playwright Browser Visibility -------------------------------------------
+# false = watch Chromium open and fill forms live on screen (ideal for local testing)
+# true  = run silently in the background
+PLAYWRIGHT_HEADLESS=false
+```
+
+---
+
+### Step 6: Start the Local Dashboard
+
+Run the development server from the repository root:
+```bash
+pnpm dev
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser. The dark-slate dashboard interface will load.
+
+---
+
+### Step 7: Upload Your CV and Configure Settings
+
+1. In the dashboard, navigate to **CV Versions (`/cv`)**.
+2. Click **Upload CV**, select your PDF CV file, provide a label (for example, `DevOps Engineer`), and assign relevant role tags.
+3. Check the **Default for** options for your target roles so the pipeline knows which CV to attach per role.
+4. Navigate to **Settings (`/settings`)** and adjust:
+   - **Target roles:** (e.g., `Cloud Engineer`, `DevOps Engineer`, `SRE`)
+   - **Target seniority:** (`junior`, `mid`, `senior`, or `any`)
+   - **Skill vocabulary:** technical keywords from your resume (`aws`, `docker`, `kubernetes`, `terraform`, `linux`, `python`)
+   - **Auto-apply score threshold:** minimum score to trigger automated application (default: `75%`)
+
+---
+
+### Step 8: Execute the Scraper and Auto-Apply Pipeline
+
+Open a second terminal window in the root directory and execute:
+
+**Linux / Windows:**
+```bash
+pnpm pipeline
+```
+
+The pipeline executes the four sequential stages:
+```
+=== [job-me] Pipeline started ===
+[scrape] Running 5 source(s)...
+[enrich] Checking postings with Gemini 2.5 Flash...
+[match] Scored jobs against settings: 56 matched, 12 new, 706 closed.
+[auto-apply] Launching Playwright Chromium...
+=== [job-me] Pipeline complete ===
+```
+Because `PLAYWRIGHT_HEADLESS=false` was configured, Chromium will display on screen, open eligible job URLs, fill in your details, attach your CV, and submit. The web dashboard updates simultaneously in real time via Supabase Realtime without page reloads.
+
+---
+
+## Track B: Cloud Deployment Guide (24/7 Automation)
+
+Deploy the system to run autonomously in the cloud at $0 cost.
+
+### Step 1: Deploy Web Frontend to Vercel
+
+1. Fork this repository to your GitHub account.
+2. Sign in to [vercel.com](https://vercel.com) and click **Add New Project**.
+3. Import your forked repository.
+4. Set the project configuration:
+   - **Framework Preset:** `Vite`
+   - **Root Directory:** `apps/web`
+   - **Build Command:** `pnpm --filter @job-me/web build`
+   - **Output Directory:** `dist`
+   - **Install Command:** `pnpm install`
+5. In **Environment Variables**, define:
+   - `VITE_SUPABASE_URL` = `https://your-project-ref.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
+   - *(Optional)* `VITE_GITHUB_PAT` = your GitHub Personal Access Token (enables the "Run now" button on the dashboard)
+   - *(Optional)* `VITE_GITHUB_REPO` = `your-username/job-me`
+6. Click **Deploy**. Your dashboard is now active on a global HTTPS URL.
+
+---
+
+### Step 2: Configure GitHub Actions Secrets
+
+In your forked GitHub repository, navigate to:  
+**Settings -> Secrets and variables -> Actions -> New repository secret**
+
+Add the following repository secrets:
+
+| Secret Name | Requirement | Description |
+|---|---|---|
+| `SUPABASE_URL` | Required | Your Supabase Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Required | Your Supabase `service_role` secret key |
+| `APPLICANT_FIRST_NAME` | Required | Applicant first name for application forms |
+| `APPLICANT_LAST_NAME` | Required | Applicant last name for application forms |
+| `APPLICANT_EMAIL` | Required | Applicant email address |
+| `APPLICANT_PHONE` | Optional [Recommended] | Applicant phone number (e.g. `+233548367637`) |
+| `GEMINI_API_KEY` | Optional [Recommended] | Gemini API key for AI spam detection and cover letters |
+
+---
+
+### Step 3: Automated 6-Hour Scheduled Execution
+
+The workflow file [`.github/workflows/scrape.yml`](./.github/workflows/scrape.yml) is scheduled to run every 6 hours:
+```yaml
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+```
+- GitHub provisions an Ubuntu runner on the free tier.
+- Playwright Chromium is initialized.
+- The pipeline downloads your role-matched CV from Supabase Storage.
+- Executes `pnpm pipeline` headlessly.
+- Consumes approximately 300 minutes per month out of GitHub's **2,000 free minutes per month**.
+
+---
+
+### Step 4: On-Demand Manual Cloud Trigger
+
+You do not need to wait for the 6-hour cron schedule:
+- **From Dashboard:** Open the `/sources` page and click **Run now** or **Run all sources**. This triggers `workflow_dispatch` via the GitHub API using `VITE_GITHUB_PAT`.
+- **From GitHub UI:** Go to **Actions -> Run pipeline -> Run workflow**.
+
+---
+
+## Environment Variables Reference (.env.local)
+
+Both local execution and the frontend web app resolve settings from root `/.env.local`:
+
+| Variable | Target Scope | Status | Purpose |
+|---|---|---|---|
+| `VITE_SUPABASE_URL` | Web + Pipeline | Required | Supabase project URL (`https://xxx.supabase.co`) |
+| `VITE_SUPABASE_ANON_KEY` | Web + Pipeline | Required | Public Supabase anon key for browser client queries |
+| `SUPABASE_SERVICE_ROLE_KEY` | Pipeline | Required | Admin secret key (bypasses RLS for scraper write operations) |
+| `APPLICANT_FIRST_NAME` | Pipeline | Required | First name entered into ATS application forms |
+| `APPLICANT_LAST_NAME` | Pipeline | Required | Last name entered into ATS application forms |
+| `APPLICANT_EMAIL` | Pipeline | Required | Contact email address entered into ATS forms |
+| `APPLICANT_PHONE` | Pipeline | Optional [Recommended] | Contact phone number entered into ATS forms |
+| `GEMINI_API_KEY` | Pipeline | Optional [Recommended] | Enables Gemini 2.5 Flash spam checking and cover letters |
+| `PLAYWRIGHT_HEADLESS` | Pipeline | Optional | `false` to display Chromium on desktop; `true` for headless |
+| `VITE_GITHUB_PAT` | Web | Optional | Personal access token (`repo` + `workflow`) for "Run now" button |
+| `VITE_GITHUB_REPO` | Web | Optional | `username/job-me` target for GitHub dispatch |
+| `VITE_GITHUB_BRANCH` | Web | Optional | Target git branch (default: `main`) |
+
+---
+
+## Platform Logic and Scoring Engine
+
+### 1. The 4-Stage Pipeline Flow
+
+1. **Stage 1 — Scrape (`pipeline/scrape.ts`):**
+   - Queries active sources in the database.
+   - Routes through 9 connector implementations: `rss`, `api`, `generic_web`, `linkedin`, `indeed`, `glassdoor`, `otta`, `jobicy`, and `arbeitnow`.
+   - Substitutes search placeholders (`{roles}`, `{locations}`, `{days}`) dynamically from your user settings.
+   - Executes batch upserts against unique job URLs to prevent duplicates.
+2. **Stage 2 — Enrich (`pipeline/enrich.ts`):**
+   - Submits raw listings to Google Gemini 2.5 Flash.
+   - Detects fraudulent/spam postings and transitions them directly to `closed`.
+   - Verifies remote work eligibility without altering original job descriptions.
+3. **Stage 3 — Match (`pipeline/match.ts`):**
+   - Applies the 5-signal algorithmic scoring engine against configured settings.
+   - Scores greater than or equal to 40% with accepted locations transition from `new` to `matched`.
+   - Low-scoring postings (< 25%) or foreign on-site roles are marked `closed`.
+4. **Stage 4 — Auto-Apply (`pipeline/auto-apply.ts`):**
+   - Retrieves `matched` postings meeting or exceeding the auto-apply threshold (default: 75%).
+   - Matches ATS patterns for Greenhouse, Lever, and Workday.
+   - Downloads the corresponding role-matched CV PDF from Supabase Storage.
+   - Playwright navigates the form, inputs applicant information, attaches the CV, and records the audit log in `applications`.
+
+---
+
+### 2. The 5-Signal Match Engine (`packages/shared/src/scoring.ts`)
+
+```
+Match Score = (Title * 0.40) + (Skills * 0.30) + (Seniority * 0.15) + (Location * 0.10) + (Recency * 0.05)
+```
+
+| Signal | Weight | Logic and Constraints |
+|---|---|---|
+| **Title Match** | **40%** | Word-level overlap against target roles (handles initialisms like SRE <-> Site Reliability Engineer). **Hard Stop**: if title has no overlap with target roles, overall score is forced to `0.00`. |
+| **Skills Overlap** | **30%** | Evaluates description against technical vocabulary (`aws`, `docker`, `kubernetes`, `terraform`, `linux`, `python`). 3 or more matches equals 100%. |
+| **Seniority** | **15%** | Evaluates Junior, Mid, or Senior tokens. Exact level match = 1.0; adjacent level = 0.5; mismatched level = 0.1. |
+| **Location Rules** | **10%** | **Ghana roles:** score 1.0 (on-site or remote).<br/>**Foreign remote roles:** score 0.95.<br/>**Foreign on-site roles:** Hard reject (score 0, status `closed`). |
+| **Recency** | **5%** | Exponential decay curve: `e^(-days / 14)`. New postings receive full score. |
+
+---
+
+### 3. Resilience and Safety Guardrails
+
+- **Fail-Fast CAPTCHA Detection:** Scans DOM for Cloudflare Turnstile, reCAPTCHA, or hCaptcha prior to form entry. If detected, execution halts immediately and routes the posting to the **Manual Queue** to protect applicant IP reputation.
+- **Attempt-Based Rate Limiting:** Form submissions are bounded by `max_auto_apply_per_run` (default: 5 to 10 per run) to maintain human-like application pacing.
+- **Manual Queue Safe Routing:** Roles on unsupported platforms, custom career sites, or requiring manual clarification are safely staged in the Manual Queue for 1-click candidate review.
+
+---
+
+## Dashboard Navigation and Workflow
+
+| Route | Page | Purpose and Functionality |
+|---|---|---|
+| **`/`** | **Dashboard** | Real-time job listing with stage counts (`New`, `Matched`, `Auto-Applied`, `Manual Queue`, `Responded`, `Closed`). Filter bar, sort selection, and slide-in **Job Detail Drawer** displaying 5-signal breakdown charts and cover letters. |
+| **`/sources`** | **Sources** | Manage job boards, view error logs and consecutive failure counts, configure search parameters, and trigger manual cloud pipeline executions via **Run now**. |
+| **`/applications`** | **Applications** | Full audit history of all submissions (automated or manual), recording timestamps, CV version used, and match score. |
+| **`/cv`** | **CV Versions** | Upload PDF resumes to Supabase Storage, tag by role classification, and toggle primary defaults per role. |
+| **`/settings`** | **Settings** | Configure target roles, accepted locations, negative keywords, skill vocabulary, auto-apply thresholds, and database maintenance options. |
+
+---
+
+## Commands and Database Maintenance Reference
+
+Run these commands from the repository root:
 
 ```bash
-pnpm dev          # Dashboard at http://localhost:5173
-pnpm pipeline     # Run the full scrape → enrich → match → auto-apply pipeline once
-pnpm typecheck    # TypeScript check across all packages
-pnpm test         # Run unit tests
-pnpm build        # Production build of the frontend
+# --- Development and Verification --------------------------------------------
+pnpm dev              # Launch Vite web dashboard at http://localhost:5173
+pnpm pipeline         # Run the full scrape -> enrich -> match -> auto-apply pipeline
+pnpm typecheck        # Verify TypeScript compilation across all workspace packages
+pnpm test             # Execute Vitest test suite for scoring engine
+pnpm build            # Produce production web application bundle
+
+# --- Database Reset and Maintenance ------------------------------------------
+pnpm db:clear         # Purge jobs and applications tables for a clean test run
+pnpm db:clear-sources # Truncate and reset the sources table
 ```
 
 ---
 
-## Full deployment
-
-### Step 1 — Deploy the frontend to Vercel
-
-1. Go to [vercel.com](https://vercel.com) → **Add New Project** → import your fork
-2. Configure the project:
-
-| Setting | Value |
-|---|---|
-| Framework Preset | `Vite` |
-| Root Directory | `apps/web` |
-| Build Command | `pnpm --filter @job-me/web build` |
-| Output Directory | `dist` |
-| Install Command | `pnpm install` |
-
-3. Add environment variables under **Settings → Environment Variables**:
-
-| Variable | Value |
-|---|---|
-| `VITE_SUPABASE_URL` | `https://your-project-ref.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
-| `VITE_GITHUB_PAT` | GitHub PAT with `repo` + `workflow` scopes — enables the "Run now" button |
-| `VITE_GITHUB_REPO` | `YOUR_USERNAME/job-me` |
-| `VITE_GITHUB_BRANCH` | `main` (optional) |
-
-4. Click **Deploy**
-
-#### Custom domain (optional)
-
-- Apex domain (`yourdomain.com`) → DNS `A` record → `76.76.21.21`
-- Subdomain (`jobs.yourdomain.com`) → DNS `CNAME` → `cname.vercel-dns.com`
-
-Vercel provisions SSL automatically.
-
-### Step 2 — Configure GitHub Actions secrets
-
-Go to your fork → **Settings → Secrets and variables → Actions → New repository secret**:
-
-| Secret | Required | Description |
-|---|---|---|
-| `SUPABASE_URL` | ✅ | `https://your-project-ref.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key |
-| `APPLICANT_FIRST_NAME` | ✅ | Your first name |
-| `APPLICANT_LAST_NAME` | ✅ | Your last name |
-| `APPLICANT_EMAIL` | ✅ | Your email for job applications |
-| `APPLICANT_PHONE` | Optional | Your phone e.g. `+447123456789` |
-| `GEMINI_API_KEY` | Optional | Enables AI features (cover letters + spam filter) |
-
-The pipeline runs automatically every 6 hours. You can also trigger it manually from the `/sources` page using the **Run now** button — it dispatches `workflow_dispatch` via the GitHub API using `VITE_GITHUB_PAT`.
-
-> **More secure alternative (optional, technical setups):** the `trigger-pipeline` Supabase Edge Function keeps the PAT server-side instead of the frontend bundle:
-> ```bash
-> supabase functions deploy trigger-pipeline --no-verify-jwt
-> supabase secrets set GH_TOKEN=github_pat_xxxxxx GITHUB_REPO=YOUR_USERNAME/job-me GITHUB_BRANCH=main
-> ```
-> The button works with either mechanism — both write the same `workflow_dispatch` event.
-
-### Step 3 — Upload your CV
-
-1. Open the dashboard → go to `/cv`
-2. Upload your CV (PDF)
-3. Set it as the default for your target roles
-
-The pipeline downloads the file of each job's **role-matched** CV row from Supabase Storage automatically (a `CV_FILE_PATH` fallback is used only for jobs that match no CV row) — no hardcoded paths.
-
-### Step 4 — Configure your settings
-
-Go to `/settings` and set:
-
-- **Target roles** — job title keywords for the scoring engine; also the default search terms for sources with no query params of their own (use `{role}` / `{roles}` placeholders to wire them into any source)
-- **Target seniority** — junior / mid / senior / any
-- **Accepted locations** — used by the location scoring signal and as the default scrape location (use `{location}` / `{locations}` placeholders)
-- **Negative keywords** — any keyword that immediately disqualifies a job
-- **Skill vocabulary** — skills from your CV used for the skills overlap signal
-- **Auto-apply threshold** — minimum score to trigger auto-apply (default 75%)
-- **Max auto-apply per run** — rate cap per pipeline run (default 5)
-- **Days-since-posted default** — feed filter and recency scoring window (use `{days}` placeholder)
-
-### Step 5 — Get a Gemini API key (optional, free)
-
-1. Go to [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
-2. Click **Create API key**
-3. Add it as `GEMINI_API_KEY` in both GitHub Actions secrets and `packages/scraper/.env`
-
-Free tier: **15 requests/minute, 1 million tokens/day** — more than enough.
-
-With a key set, the pipeline will:
-- Filter spam/fake/MLM postings before scoring
-- Confirm remote status on ambiguous listings
-- Generate a tailored 3-paragraph cover letter per auto-apply
-
-Without a key, the pipeline runs normally — AI steps are silently skipped.
-
----
-
-## Dashboard pages
-
-| Page | Route | Description |
-|---|---|---|
-| Dashboard | `/` | Job list with pipeline sidebar, filter bar, bulk-delete, and detail drawer |
-| Sources | `/sources` | Add/edit/toggle job board sources, trigger manual runs |
-| Applications | `/applications` | Full history of every auto and manual application |
-| CV | `/cv` | Upload CV versions, set defaults per role |
-| Settings | `/settings` | Target roles, seniority, locations, skills, thresholds |
-
----
-
-## Scoring engine
-
-Every job is scored `0.00–1.00` across 5 signals:
-
-| Signal | Weight | Logic |
-|---|---|---|
-| Title match | **40%** | Whole-word overlap against your target roles (initialisms like SRE ↔ Site Reliability Engineer match too). No role words → score forced to 0 |
-| Skills overlap | **30%** | Whole-word match against your skill vocabulary in the description |
-| Seniority | **15%** | Detected level vs target; adjacent levels get partial credit |
-| Location | **10%** | Driven by your accepted-locations setting: 1.0 for listed Ghana locations, 0.95 for listed remote locations, 0.8 for other accepted locations; anything else → rejected and closed. An empty list accepts all locations |
-| Recency decay | **5%** | Exponential decay — 14-day-old post scores ~37% |
-
-A negative keyword hit forces the score to `0.00` immediately and closes the job. Jobs scoring ≥ 40% (`MATCH_PROMOTION_THRESHOLD`) with an accepted location are promoted from **New** to **Matched**; already-matched jobs keep their status (no flapping), and manual-queue jobs are never auto-promoted.
-
----
-
-## Source connectors
-
-| Type | Notes |
-|---|---|
-| `rss` | Generic RSS/Atom — WeWorkRemotely, Remotive, NoDesk, HN Jobs, Dev.to |
-| `api` | Generic REST API — RemoteOK, Remotive API |
-| `generic_web` | Playwright headless scraper — auto-detects job cards/links on any public career/board page |
-| `arbeitnow` | Free EU/remote API, no key needed |
-| `jobicy` | Free remote API, no key needed |
-| `linkedin` | Playwright headless scraper — no login, first ~25 public results |
-| `indeed` | Playwright headless scraper |
-| `glassdoor` | Playwright headless scraper |
-| `otta` | Free public API |
-
----
-
-## Auto-apply connectors
-
-| ATS | URL pattern matched |
-|---|---|
-| Greenhouse | `greenhouse.io`, `boards.greenhouse.io` |
-| Lever | `jobs.lever.co`, `lever.co/` |
-| Workday | `myworkdayjobs.com`, `wd3.myworkday.com`, `wd1.myworkday.com` |
-
-Jobs with no matching connector go to **Manual Queue** automatically (these don't consume rate-cap budget). Every attempt against a connector — success or failure — counts toward the per-run rate cap.
-
----
-
-## Adding job sources
-
-From `/sources`, click **Add source**:
-
-- **Name** — display name
-- **Type** — connector type from the table above
-- **Base URL** — the feed or API endpoint
-- **Query params** — JSON object of URL parameters
-
-### Settings placeholders
-
-Every source is scraped with your **/settings** configuration applied. Any of these placeholders can be used in the **Base URL** or in **Query params** (string values), and are substituted at scrape time:
-
-| Placeholder | Resolves to |
-|---|---|
-| `{roles}` | All target roles, space-joined |
-| `{role}` | First target role |
-| `{locations}` | All accepted locations, space-joined |
-| `{location}` | First accepted location |
-| `{days}` | Days-since-posted default |
-
-This works for **all 9 source types** — including generic web pages, where the search terms live in the URL itself. Sources without placeholders keep their configured values verbatim. Sources with **no query params at all** get settings-derived defaults automatically (first target role, first accepted location, and a recency window from `days_posted_default` where the API supports it).
-
-### Example configs
-
-**Generic Web Page (Playwright) — any careers page, driven by Settings**
-```json
-{
-  "type": "generic_web",
-  "base_url": "https://example.com/jobs?q={role}&location={location}&posted_within={days}",
-  "query_params": { "card_selector": ".job-card", "title_selector": ".job-card h3" }
-}
-```
-
-**Generic Web Page (Playwright) — Public Careers Page (fixed URL)**
-```json
-{
-  "type": "generic_web",
-  "base_url": "https://remotive.com/remote-devops-jobs",
-  "query_params": {}
-}
-```
-
-**Indeed Playwright — DevOps Remote**
-```json
-{
-  "type": "indeed",
-  "base_url": "https://www.indeed.com/jobs",
-  "query_params": { "q": "devops engineer", "l": "Remote", "sort": "date", "fromage": "7" }
-}
-```
-
-**LinkedIn — SRE Worldwide**
-```json
-{
-  "type": "linkedin",
-  "base_url": "https://www.linkedin.com/jobs/search",
-  "query_params": { "keywords": "site reliability engineer", "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800" }
-}
-```
-
-**WeWorkRemotely RSS**
-```json
-{
-  "type": "rss",
-  "base_url": "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
-  "query_params": {}
-}
-```
-
-**Jobicy — Terraform**
-```json
-{
-  "type": "jobicy",
-  "base_url": "https://jobicy.com/api/v2/remote-jobs",
-  "query_params": { "tag": "terraform", "count": "50" }
-}
-```
-
----
-
-## Environment variables reference
-
-### `apps/web/.env.local`
-
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_SUPABASE_URL` | ✅ | Your Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase anon key (safe to expose in frontend) |
-| `VITE_GITHUB_PAT` | Optional | GitHub PAT with `repo` + `workflow` scopes — enables the "Run now" button |
-| `VITE_GITHUB_REPO` | Optional | `username/repo` — required if PAT is set |
-| `VITE_GITHUB_BRANCH` | Optional | Branch to trigger workflow on (default: `main`) |
-
-### `packages/scraper/.env` / GitHub Actions secrets
-
-| Variable | Required | Description |
-|---|---|---|
-| `SUPABASE_URL` | ✅ | Your Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key — bypasses RLS, keep secret |
-| `APPLICANT_FIRST_NAME` | ✅ | Used in auto-apply form fields |
-| `APPLICANT_LAST_NAME` | ✅ | Used in auto-apply form fields |
-| `APPLICANT_EMAIL` | ✅ | Used in auto-apply form fields |
-| `APPLICANT_PHONE` | Optional | Used in auto-apply phone fields |
-| `CV_FILE_PATH` | Optional* | Fallback CV path — used only for jobs that match no CV row |
-| `GEMINI_API_KEY` | Optional | Enables AI spam filtering and cover letter generation |
-
-> \* In GitHub Actions, `CV_FILE_PATH` is seeded automatically by the workflow when a CV exists in Supabase Storage, and auto-apply downloads each job's role-matched CV regardless. You only need to set it manually for local pipeline runs without uploaded CVs.
-
----
-
-## Contributing
-
-1. Fork the repo and create a feature branch
-2. Run `pnpm typecheck && pnpm test && pnpm build` before opening a PR — all three must pass
-3. Keep secrets out of committed code — use `.env.example` files as the reference
-4. Add a connector? Follow the `AutoApplyConnector` interface in `packages/scraper/src/auto-apply-connectors/base.ts`
+## Troubleshooting and Platform FAQ
+
+### 1. `Error: Chromium executable doesn't exist`
+- **Linux:** Run `npx playwright install --with-deps chromium`. If library dependencies are missing, install them via your distribution package manager (`sudo apt-get install -y libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2`).
+- **Windows:** Run `npx playwright install chromium` in PowerShell.
+
+### 2. `Supabase Storage: Bucket not found (cv-files)`
+- In the Supabase Dashboard, open **Storage**, click **New bucket**, enter the exact name `cv-files`, select **Private**, and click **Save**.
+
+### 3. Windows PowerShell: `Execution of scripts is disabled on this system`
+- Open PowerShell as Administrator and run:
+  ```powershell
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  ```
+- Alternatively, execute commands inside Git Bash.
+
+### 4. Why do scraped postings receive a 0% match score?
+- Inspect your **Target Roles** configuration in `/settings`. If a job posting title does not contain any of your designated role terms (e.g. `Cloud`, `DevOps`, `SRE`), the scoring engine forces the score to `0.00` to prevent unintended submissions.
+
+### 5. Will job platforms block my IP address?
+- No. `job-me` executes on a spaced 6-hour interval, limits application attempts to 5-10 per execution batch, and immediately aborts with safe manual routing if a CAPTCHA challenge is detected.
 
 ---
 
 ## License
 
-MIT — free for personal and commercial use.
+MIT License. Free for personal, educational, and commercial use.  
+Built for job seekers who want 24/7 automation with zero hosting costs.
