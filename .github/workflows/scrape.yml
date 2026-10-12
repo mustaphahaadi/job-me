@@ -77,6 +77,5 @@ jobs:
           APPLICANT_PHONE: ${{ secrets.APPLICANT_PHONE }}
           # Optional: enables AI cover letter generation and spam filtering (OpenRouter)
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          # Optional: override the default model (e.g. openai/gpt-4o-mini)
-          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
-
+          # Optional: override the default model (e.g. openai/gpt-4o-mini or google/gemini-2.5-flash)
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL || vars.OPENROUTER_MODEL || '' }}

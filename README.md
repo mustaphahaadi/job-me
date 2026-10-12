@@ -209,9 +209,10 @@ APPLICANT_LAST_NAME=Haadi
 APPLICANT_EMAIL=mustapha.haadi@example.com
 APPLICANT_PHONE=+233548367637
 
-# --- Google Gemini AI (Optional - Free Tier) ---------------------------------
-# Obtain free key at: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your-gemini-api-key-here
+# --- OpenRouter AI (Optional - Free Tier or Pay-as-you-go) ----------------
+# Obtain API key at: https://openrouter.ai/keys
+OPENROUTER_API_KEY=your-openrouter-api-key-here
+# OPENROUTER_MODEL=google/gemini-2.5-flash  # optional override, default: google/gemini-2.5-flash
 
 # --- Playwright Browser Visibility -------------------------------------------
 # false = watch Chromium open and fill forms live on screen (ideal for local testing)
@@ -346,8 +347,8 @@ Both local execution and the frontend web app resolve settings from root `/.env.
 | `APPLICANT_FIRST_NAME` | Pipeline | Required | First name entered into ATS application forms |
 | `APPLICANT_LAST_NAME` | Pipeline | Required | Last name entered into ATS application forms |
 | `APPLICANT_EMAIL` | Pipeline | Required | Contact email address entered into ATS forms |
-| `APPLICANT_PHONE` | Pipeline | Optional [Recommended] | Contact phone number entered into ATS forms |
-| `GEMINI_API_KEY` | Pipeline | Optional [Recommended] | Enables Gemini 2.5 Flash spam checking and cover letters |
+| `OPENROUTER_API_KEY` | Pipeline | Optional [Recommended] | OpenRouter key for AI spam checking and tailored cover letters |
+| `OPENROUTER_MODEL` | Pipeline | Optional | Model identifier (default: `google/gemini-2.5-flash` or `openai/gpt-4o-mini`) |
 | `PLAYWRIGHT_HEADLESS` | Pipeline | Optional | `false` to display Chromium on desktop; `true` for headless |
 | `VITE_GITHUB_PAT` | Web | Optional | Personal access token (`repo` + `workflow`) for "Run now" button |
 | `VITE_GITHUB_REPO` | Web | Optional | `username/job-me` target for GitHub dispatch |
