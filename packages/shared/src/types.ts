@@ -50,7 +50,7 @@ export interface CvVersion {
 
 export interface MatchBreakdown {
   title_match: { score: number; weight: number; matched_keywords: string[] };
-  skills_overlap: { score: number; weight: number; matched_skills: string[] };
+  skills_overlap: { score: number; weight: number; matched_skills: string[]; description_available: boolean };
   seniority: { score: number; weight: number; detected_level: string | null };
   location: { score: number; weight: number; accepted: boolean };
   recency: { score: number; weight: number; days_old: number };
@@ -67,6 +67,7 @@ export interface Job {
   url: string;
   posted_date: string | null;
   scraped_at: string;
+  enriched_at?: string | null;
   description: string | null;
   raw_location: string | null;
   match_score: number | null;

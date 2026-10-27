@@ -1,24 +1,8 @@
 import { chromium } from 'playwright';
 import type { Job, CvVersion } from '@job-me/shared';
 import type { AutoApplyConnector } from './base.js';
-import { detectCaptcha, captchaError } from './base.js';
-import { GreenhouseConnector } from './greenhouse.js';
-import { LeverConnector } from './lever.js';
-import { WorkdayConnector } from './workday.js';
-
-// ─── ATS URL detectors ────────────────────────────────────────────────────────
-const ATS_PATTERNS: Array<{ pattern: RegExp; connector: AutoApplyConnector }> = [
-  { pattern: /(greenhouse\.io|boards\.greenhouse\.io|job-boards\.greenhouse\.io|bamboohr\.com|breezy\.hr|workable\.com)/i, connector: new GreenhouseConnector() },
-  { pattern: /(lever\.co|jobs\.lever\.co|ashbyhq\.com|jobs\.ashbyhq\.com|smartrecruiters\.com)/i, connector: new LeverConnector() },
-  { pattern: /(myworkdayjobs\.com|workday\.com|wd\d+\.myworkday\.com)/i, connector: new WorkdayConnector() },
-];
-
-function findAtsConnector(url: string): AutoApplyConnector | null {
-  for (const { pattern, connector } of ATS_PATTERNS) {
-    if (pattern.test(url)) return connector;
-  }
-  return null;
-}
+import { detectCaptcha, captchaError, getApplicant, isHeadless } from './base.js';
+import { findAtsConnector, getHostname } from './ats.js';
 
 const BLOCKED_DOMAINS = [
   'producthunt.com',
@@ -70,7 +54,10 @@ const BLOCKED_PATH_PATTERNS = [
 function isValidApplyUrl(urlStr: string, jobHostname: string): boolean {
   try {
     const u = new URL(urlStr);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+
     const host = u.hostname.toLowerCase();
+    if (!host) return false;
     const pathAndQuery = (u.pathname + u.search).toLowerCase();
 
     if (BLOCKED_DOMAINS.some(d => host === d || host.endsWith('.' + d))) {
@@ -127,17 +114,13 @@ const APPLY_SELECTORS = [
  */
 export class JobBoardResolverConnector implements AutoApplyConnector {
   async apply(job: Job, cv: CvVersion | null, coverLetter: string | null | undefined, cvFilePath: string): Promise<void> {
-    const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'] || 'Applicant';
-    const LAST_NAME  = process.env['APPLICANT_LAST_NAME']  || 'User';
-    const EMAIL      = process.env['APPLICANT_EMAIL']      || 'applicant@example.com';
-    const PHONE      = process.env['APPLICANT_PHONE']      || '';
+    const applicant = getApplicant();
 
     if (!cvFilePath) {
       throw new Error('No CV file — upload a CV on the /cv page or set CV_FILE_PATH in env.');
     }
 
-    const isHeadless = process.env['PLAYWRIGHT_HEADLESS'] !== 'false';
-    const browser = await chromium.launch({ headless: isHeadless });
+    const browser = await chromium.launch({ headless: isHeadless() });
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
@@ -148,15 +131,29 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
       await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForTimeout(2000);
 
-      const jobHostname = new URL(job.url).hostname;
+      const jobHostname = getHostname(job.url);
+      if (!jobHostname) {
+        throw new Error(`Invalid job URL: ${job.url}`);
+      }
       let applyUrl: string | null = null;
 
-      // Check 1: Scan for ANY known ATS link on the page directly (highest accuracy)
+      // Check 1: Scan for a known ATS link whose visible text actually says
+      // "apply". A bare ATS link could be a footer/"powered by" link pointing
+      // at a different job — submitting through it would apply to the wrong
+      // posting.
       const allPageLinks = await page.$$eval('a[href]', anchors =>
-        anchors.map(a => (a as HTMLAnchorElement).href)
+        anchors.map(a => ({
+          href: (a as HTMLAnchorElement).href,
+          text: (a.textContent ?? '').trim().toLowerCase(),
+          label: (a.getAttribute('aria-label') ?? '').trim().toLowerCase(),
+        }))
       ).catch(() => []);
 
-      const directAtsLink = allPageLinks.find(href => findAtsConnector(href) !== null && isValidApplyUrl(href, jobHostname));
+      const directAtsLink = allPageLinks.find(link =>
+        (link.text.includes('apply') || link.text.includes('application') || link.label.includes('apply')) &&
+        findAtsConnector(link.href) !== null &&
+        isValidApplyUrl(link.href, jobHostname)
+      )?.href;
       if (directAtsLink) {
         applyUrl = directAtsLink;
       }
@@ -238,7 +235,17 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
         return;
       }
 
-      // ── Step 4: Generic apply — navigate to the apply URL and fill form
+      // ── Step 4: Generic apply — opt-in only ────────────────────────────────
+      // Filling an unknown third-party form with the applicant's CV and PII is
+      // unsafe by default: the resolved link could point anywhere. Require an
+      // explicit opt-in; otherwise route the job to manual review.
+      if (process.env['ALLOW_GENERIC_AUTO_APPLY'] !== 'true') {
+        throw new Error(
+          `Unrecognised apply page at ${applyUrl.slice(0, 120)} — manual review required. ` +
+          'Set ALLOW_GENERIC_AUTO_APPLY=true to enable best-effort generic form filling.'
+        );
+      }
+
       await page.goto(applyUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForTimeout(2000);
 
@@ -250,10 +257,10 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
         if (el) { await el.fill(value); }
       };
 
-      await tryFill('input[name="first_name"], input[id*="first"][type="text"], input[placeholder*="First" i]', FIRST_NAME);
-      await tryFill('input[name="last_name"], input[id*="last"][type="text"], input[placeholder*="Last" i]', LAST_NAME);
-      await tryFill('input[name="email"], input[type="email"]', EMAIL);
-      if (PHONE) await tryFill('input[name="phone"], input[type="tel"]', PHONE);
+      await tryFill('input[name="first_name"], input[id*="first"][type="text"], input[placeholder*="First" i]', applicant.firstName);
+      await tryFill('input[name="last_name"], input[id*="last"][type="text"], input[placeholder*="Last" i]', applicant.lastName);
+      await tryFill('input[name="email"], input[type="email"]', applicant.email);
+      if (applicant.phone) await tryFill('input[name="phone"], input[type="tel"]', applicant.phone);
 
       // CV upload
       const fileInput = await page.$('input[type="file"]');
@@ -278,15 +285,22 @@ export class JobBoardResolverConnector implements AutoApplyConnector {
       }
       await submitBtn.click();
 
-      // Wait for confirmation
-      await Promise.any([
-        page.waitForSelector('text=Thank you', { timeout: 10_000 }),
-        page.waitForSelector('text=submitted', { timeout: 10_000 }),
-        page.waitForSelector('text=received', { timeout: 10_000 }),
-        page.waitForURL(url => url.href !== applyUrl, { timeout: 10_000 }),
-      ]).catch(() => {
-        console.warn(`[auto-apply] No confirmation page detected for ${applyUrl?.slice(0, 60)} — submission may still have succeeded.`);
-      });
+      // Require an explicit confirmation. A URL change alone is not proof:
+      // validation errors and login redirects also change the URL. If we cannot
+      // confirm, route the job to manual review rather than claiming success.
+      try {
+        await Promise.any([
+          page.waitForSelector('text=/thank you for applying|thanks for applying/i', { timeout: 10_000 }),
+          page.waitForSelector('text=/application (has been )?submitted/i', { timeout: 10_000 }),
+          page.waitForSelector('text=/application (has been )?received/i', { timeout: 10_000 }),
+          page.waitForSelector('text=/successfully submitted/i', { timeout: 10_000 }),
+        ]);
+      } catch {
+        throw new Error(
+          `No confirmation page detected at ${applyUrl.slice(0, 120)} — submission may not have completed. ` +
+          'Manual review required.'
+        );
+      }
 
     } finally {
       await browser.close();

@@ -1,7 +1,7 @@
 import Parser from 'rss-parser';
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { buildUrl, toIsoDate, extractLocationFromText } from './utils.js';
+import { buildUrl, toIsoDate, extractLocationFromText, stripHtml } from './utils.js';
 
 type RssItem = {
   title?: string;
@@ -55,7 +55,7 @@ export class RssConnector implements Connector {
       const rawCompany = extractCompany(item);
       const { title, company } = parseTitleAndCompany(item.title, rawCompany);
 
-      const description = item.contentSnippet ?? item.content ?? null;
+      const description = item.contentSnippet?.trim() || stripHtml(item.content);
       const rawLocation = extractLocation(item)
         ?? extractLocationFromText(item.title ?? '')
         ?? extractLocationFromText(description ?? '');

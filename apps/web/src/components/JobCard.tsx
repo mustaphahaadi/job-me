@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { Job } from '@job-me/shared';
 import { MapPin, Clock } from 'lucide-react';
 import { PipelineTrack } from './PipelineTrack';
@@ -13,7 +14,10 @@ interface Props {
 
 function daysOld(dateStr: string | null): number | null {
   if (!dateStr) return null;
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+  const timestamp = new Date(dateStr).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  // Clamp future dates (source-data errors) so they do not render as "-3d ago".
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
 }
 
 function ageBadge(dateStr: string | null): { label: string; color: string } | null {
@@ -35,8 +39,11 @@ function getScoreColor(score: number | null): string {
 
 export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
   const keywords = job.matched_keywords ? job.matched_keywords.slice(0, 4) : [];
-  const scoreColor = getScoreColor(job.match_score);
-  const scorePct = job.match_score !== null ? Math.round(job.match_score * 100) : null;
+  const rawScore = job.match_score;
+  const scorePct = typeof rawScore === 'number' && Number.isFinite(rawScore)
+    ? Math.round(rawScore * 100)
+    : null;
+  const scoreColor = getScoreColor(scorePct === null ? null : scorePct / 100);
 
   const metaItems: Array<{ key: string; node: React.ReactNode }> = [];
   if (sourceName) metaItems.push({ key: 'source', node: sourceName });
@@ -69,7 +76,12 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
       onClick={() => onClick(job)}
       role="button"
       tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClick(job); }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(job);
+        }
+      }}
       aria-label={`${job.title} at ${job.company ?? 'Unknown company'}`}
       aria-pressed={isSelected}
     >
@@ -97,7 +109,7 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
               </span>
             ) : (
               <span className={styles.scoreBadgeUnscored}>
-                0% Match
+                Unscored
               </span>
             )}
             <StatusTag status={job.status} />
@@ -129,10 +141,10 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
 
         <div className={styles.meta}>
           {metaItems.map((item, i) => (
-            <>
-              {i > 0 && <span key={`dot-${item.key}`} className={styles.metaDot} />}
-              <span key={item.key} className={styles.metaItem}>{item.node}</span>
-            </>
+            <Fragment key={item.key}>
+              {i > 0 && <span className={styles.metaDot} />}
+              <span className={styles.metaItem}>{item.node}</span>
+            </Fragment>
           ))}
         </div>
       </div>

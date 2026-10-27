@@ -1,12 +1,12 @@
 # job-me
 
 > **An autonomous, self-hosted job application pipeline and personal tracking dashboard.**  
-> Scrapes 9 job board sources, scores postings against your exact technical profile using a 5-signal algorithm, filters spam with Google Gemini AI, generates tailored cover letters, and auto-applies to ATS systems (Greenhouse, Lever, Workday) using Playwright — all running 24/7 for **$0 hosting cost**.
+> Scrapes 12 source connectors, scores postings against your exact technical profile using a 5-signal algorithm, filters spam with OpenRouter AI (default: Google Gemini 2.5 Flash), generates tailored cover letters, and auto-applies to ATS systems (Greenhouse, Lever, Workday, and common ATS hosts) using Playwright — all running 24/7 for **$0 hosting cost**.
 
 ```
 +------------+     +--------------+     +-------------+     +----------------+
 | 1. SCRAPE  | --> |  2. ENRICH   | --> |  3. MATCH   | --> | 4. AUTO-APPLY  |
-| 9 boards   |     | Gemini AI    |     | 5 signals   |     | Playwright ATS |
+| 12 connectors |     | OpenRouter AI |     | 5 signals   |     | Playwright ATS |
 | & feeds    |     | Spam filter  |     | 0%-100% fit |     | & CV upload    |
 +------------+     +--------------+     +-------------+     +----------------+
 ```
@@ -38,7 +38,7 @@ Job hunting burnout is driven by three frictions:
 3. **Location Mismatch:** Spending time applying to international roles only to get auto-rejected because they require non-sponsored on-site presence.
 
 **`job-me` solves this with an end-to-end autonomous engine:**
-- **Automated Discovery:** Scrapes listings every 6 hours across 9 source types (RSS, APIs, LinkedIn, RemoteOK, Jobicy, Arbeitnow, generic web pages).
+- **Automated Discovery:** Scrapes listings every 6 hours across 12 connector types (RSS, generic APIs such as RemoteOK/Remotive, LinkedIn, Indeed, Glassdoor, Otta, Jobicy, Arbeitnow, generic web pages, Greenhouse, Ashby, Lever).
 - **Intelligent 5-Signal Scoring:** Evaluates title match, skill overlap, seniority, location eligibility, and recency on a calibrated scale (0% to 100%).
 - **Strict Location Engine:** Gives Ghana and African roles top priority (1.0), accepts verified remote foreign roles (0.95), and hard-rejects foreign on-site roles (0.0 -> Closed).
 - **Automated Submissions:** Playwright Chromium fills out application forms, attaches the correct role-matched PDF CV, and writes a tailored AI cover letter.
@@ -53,15 +53,15 @@ Job hunting burnout is driven by three frictions:
 | **Frontend Dashboard** | React 18, React Router v6, CSS Modules, Lucide Icons | **Vercel** — Free tier ($0) |
 | **Database & Storage** | Supabase (PostgreSQL + Row Level Security + Storage Buckets + Realtime) | **Supabase** — Free tier ($0) |
 | **Automation Pipeline** | Node.js, Playwright (Chromium), `rss-parser` | **GitHub Actions** — 6-hour cron ($0) |
-| **AI Intelligence** | Google Gemini 2.5 Flash (Spam detection & cover letters) | **Google AI Studio** — Free tier ($0) |
+| **AI Intelligence** | OpenRouter (default: Google Gemini 2.5 Flash) for spam detection & cover letters | **OpenRouter** — Free/cheap tier |
 | **Monorepo Tooling** | TypeScript, pnpm workspaces, Vitest | Local machine ($0) |
 
 ```
 job-me/
 |-- apps/web/                    -> React 18 + Vite SPA dashboard
 |-- packages/
-|   |-- shared/                  -> Scoring engine, domain types, Supabase & Gemini clients
-|   `-- scraper/                 -> 4-stage pipeline, 9 connectors, Playwright ATS form-fillers
+|   |-- shared/                  -> Scoring engine, domain types, Supabase & OpenRouter clients
+|   `-- scraper/                 -> 4-stage pipeline, 12 connectors, Playwright ATS form-fillers
 |-- supabase/
 |   |-- schema.sql               -> Single-file idempotent database schema & seed data
 |   `-- functions/               -> Optional trigger-pipeline edge function
@@ -107,9 +107,9 @@ pnpm -v
 - **Linux:** `sudo apt-get install -y git` (or distribution package manager).
 - **Windows:** Download from [git-scm.com](https://git-scm.com) or run `winget install Git.Git`.
 
-### 4. Supabase & Google Gemini Accounts
+### 4. Supabase & OpenRouter Accounts
 - **Supabase Account:** Free tier project at [supabase.com](https://supabase.com).
-- **Google Gemini API Key:** Optional free key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+- **OpenRouter API Key:** Optional key at [openrouter.ai/keys](https://openrouter.ai/keys) for AI spam detection and cover letters.
 
 ---
 
@@ -170,7 +170,7 @@ npx playwright install chromium
 3. Open the **SQL Editor** in Supabase:
    - Open [`supabase/schema.sql`](./supabase/schema.sql) in this repository.
    - Copy the entire SQL content, paste it into the SQL Editor, and click **Run**.  
-   *Note: The schema is fully idempotent. It safely creates all 5 tables (`sources`, `jobs`, `cv_versions`, `applications`, `settings`), indexes, Row Level Security policies, and initial job sources.*
+   *Note: The schema is fully idempotent. It safely creates all 5 tables (`sources`, `jobs`, `cv_versions`, `applications`, `settings`), indexes, Row Level Security policies, and initial job sources. Re-run it after upgrading an existing database to add newer columns such as `jobs.enriched_at`.*
 4. Create the CV Storage Bucket:
    - Go to **Storage -> New Bucket**.
    - Bucket name: `cv-files` (must be exact).
@@ -258,7 +258,8 @@ The pipeline executes the four sequential stages:
 ```
 === [job-me] Pipeline started ===
 [scrape] Running 5 source(s)...
-[enrich] Checking postings with Gemini 2.5 Flash...
+[enrich] Enriching 60 job(s) via OpenRouter.
+[enrich] Done. 58 enriched, 2 spam closed.
 [match] Scored jobs against settings: 56 matched, 12 new, 706 closed.
 [auto-apply] Launching Playwright Chromium...
 === [job-me] Pipeline complete ===
@@ -285,8 +286,7 @@ Deploy the system to run autonomously in the cloud at $0 cost.
 5. In **Environment Variables**, define:
    - `VITE_SUPABASE_URL` = `https://your-project-ref.supabase.co`
    - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
-   - *(Optional)* `VITE_GITHUB_PAT` = your GitHub Personal Access Token (enables the "Run now" button on the dashboard)
-   - *(Optional)* `VITE_GITHUB_REPO` = `your-username/job-me`
+   - The "Run now" button is optional and uses the server-side `trigger-pipeline` Edge Function — do **not** put a GitHub PAT in Vercel.
 6. Click **Deploy**. Your dashboard is now active on a global HTTPS URL.
 
 ---
@@ -296,9 +296,9 @@ Deploy the system to run autonomously in the cloud at $0 cost.
 In your forked GitHub repository, navigate to:  
 **Settings -> Secrets and variables -> Actions -> New repository secret**
 
-Add the following repository secrets:
+Add the following repository secrets (plus one optional variable):
 
-| Secret Name | Requirement | Description |
+| Name | Requirement | Description |
 |---|---|---|
 | `SUPABASE_URL` | Required | Your Supabase Project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Required | Your Supabase `service_role` secret key |
@@ -306,7 +306,11 @@ Add the following repository secrets:
 | `APPLICANT_LAST_NAME` | Required | Applicant last name for application forms |
 | `APPLICANT_EMAIL` | Required | Applicant email address |
 | `APPLICANT_PHONE` | Optional [Recommended] | Applicant phone number (e.g. `+233548367637`) |
-| `GEMINI_API_KEY` | Optional [Recommended] | Gemini API key for AI spam detection and cover letters |
+| `OPENROUTER_API_KEY` | Optional [Recommended] | OpenRouter key for AI spam detection and cover letters |
+| `OPENROUTER_MODEL` | Optional | Override the default `google/gemini-2.5-flash` model |
+| `ALLOW_GENERIC_AUTO_APPLY` | Optional | Repository **variable** (not a secret): `true` to opt into best-effort generic form filling; unknown apply pages otherwise go to Manual Queue |
+
+> CI always runs Playwright headless. `PLAYWRIGHT_HEADLESS=false` is only for local runs.
 
 ---
 
@@ -321,7 +325,7 @@ on:
 ```
 - GitHub provisions an Ubuntu runner on the free tier.
 - Playwright Chromium is initialized.
-- The pipeline downloads your role-matched CV from Supabase Storage.
+- Auto-apply downloads each job's role-matched CV from Supabase Storage; the workflow also seeds a fallback from your latest CV.
 - Executes `pnpm pipeline` headlessly.
 - Consumes approximately 300 minutes per month out of GitHub's **2,000 free minutes per month**.
 
@@ -330,7 +334,11 @@ on:
 ### Step 4: On-Demand Manual Cloud Trigger
 
 You do not need to wait for the 6-hour cron schedule:
-- **From Dashboard:** Open the `/sources` page and click **Run now** or **Run all sources**. This triggers `workflow_dispatch` via the GitHub API using `VITE_GITHUB_PAT`.
+- **From Dashboard:** Open the `/sources` page and click **Run now** or **Run all sources**. This invokes the server-side `trigger-pipeline` Supabase Edge Function, which dispatches `workflow_dispatch` using a GitHub PAT stored only in function secrets. Deploy it once:
+  ```bash
+  supabase functions deploy trigger-pipeline --no-verify-jwt
+  supabase secrets set GH_TOKEN=github_pat_... GITHUB_REPO=owner/repo GITHUB_BRANCH=main
+  ```
 - **From GitHub UI:** Go to **Actions -> Run pipeline -> Run workflow**.
 
 ---
@@ -347,12 +355,14 @@ Both local execution and the frontend web app resolve settings from root `/.env.
 | `APPLICANT_FIRST_NAME` | Pipeline | Required | First name entered into ATS application forms |
 | `APPLICANT_LAST_NAME` | Pipeline | Required | Last name entered into ATS application forms |
 | `APPLICANT_EMAIL` | Pipeline | Required | Contact email address entered into ATS forms |
+| `APPLICANT_PHONE` | Pipeline | Optional | Phone number entered into ATS forms |
 | `OPENROUTER_API_KEY` | Pipeline | Optional [Recommended] | OpenRouter key for AI spam checking and tailored cover letters |
-| `OPENROUTER_MODEL` | Pipeline | Optional | Model identifier (default: `google/gemini-2.5-flash` or `openai/gpt-4o-mini`) |
+| `OPENROUTER_MODEL` | Pipeline | Optional | Model identifier (default: `google/gemini-2.5-flash`) |
 | `PLAYWRIGHT_HEADLESS` | Pipeline | Optional | `false` to display Chromium on desktop; `true` for headless |
-| `VITE_GITHUB_PAT` | Web | Optional | Personal access token (`repo` + `workflow`) for "Run now" button |
-| `VITE_GITHUB_REPO` | Web | Optional | `username/job-me` target for GitHub dispatch |
-| `VITE_GITHUB_BRANCH` | Web | Optional | Target git branch (default: `main`) |
+| `ALLOW_GENERIC_AUTO_APPLY` | Pipeline | Optional | `true` enables best-effort filling of unrecognised apply pages; default `false` routes them to Manual Queue |
+| `GH_TOKEN` | Supabase Edge Function | Optional [Run now] | GitHub PAT for the `trigger-pipeline` function (never a `VITE_*` variable) |
+| `GITHUB_REPO` | Supabase Edge Function | Optional [Run now] | `owner/repo` target for the pipeline dispatch |
+| `GITHUB_BRANCH` | Supabase Edge Function | Optional | Target git branch (default: `main`) |
 
 ---
 
@@ -362,22 +372,24 @@ Both local execution and the frontend web app resolve settings from root `/.env.
 
 1. **Stage 1 — Scrape (`pipeline/scrape.ts`):**
    - Queries active sources in the database.
-   - Routes through 9 connector implementations: `rss`, `api`, `generic_web`, `linkedin`, `indeed`, `glassdoor`, `otta`, `jobicy`, and `arbeitnow`.
+   - Routes through connector implementations for RSS, generic APIs, generic web pages, LinkedIn, Indeed, Glassdoor, Otta, Jobicy, Arbeitnow, Greenhouse, Ashby, and Lever.
    - Substitutes search placeholders (`{roles}`, `{locations}`, `{days}`) dynamically from your user settings.
-   - Executes batch upserts against unique job URLs to prevent duplicates.
+   - Executes chunked batch upserts against unique job URLs to prevent duplicates and avoid request-size limits.
 2. **Stage 2 — Enrich (`pipeline/enrich.ts`):**
-   - Submits raw listings to Google Gemini 2.5 Flash.
+   - Submits un-enriched `new` and `matched` listings to OpenRouter (default: Google Gemini 2.5 Flash).
    - Detects fraudulent/spam postings and transitions them directly to `closed`.
    - Verifies remote work eligibility without altering original job descriptions.
+   - Records `enriched_at` so each job is analysed once instead of every run.
 3. **Stage 3 — Match (`pipeline/match.ts`):**
    - Applies the 5-signal algorithmic scoring engine against configured settings.
    - Scores greater than or equal to 40% with accepted locations transition from `new` to `matched`.
-   - Low-scoring postings (< 25%) or foreign on-site roles are marked `closed`.
+   - Low-scoring postings (< 25%) or foreign on-site roles are marked `closed`; `manual_queue` jobs are exempt from low-score closure.
 4. **Stage 4 — Auto-Apply (`pipeline/auto-apply.ts`):**
    - Retrieves `matched` postings meeting or exceeding the auto-apply threshold (default: 75%).
-   - Matches ATS patterns for Greenhouse, Lever, and Workday.
-   - Downloads the corresponding role-matched CV PDF from Supabase Storage.
+   - Matches ATS hostnames for Greenhouse, Lever, and Workday, plus common hosts (BambooHR, Breezy, Workable, Ashby, SmartRecruiters); job-board listings are resolved first.
+   - Downloads the corresponding role-matched CV file from Supabase Storage, preserving its real extension.
    - Playwright navigates the form, inputs applicant information, attaches the CV, and records the audit log in `applications`.
+   - Unknown apply pages go to the Manual Queue unless `ALLOW_GENERIC_AUTO_APPLY=true` is explicitly set.
 
 ---
 
@@ -390,17 +402,17 @@ Match Score = (Title * 0.40) + (Skills * 0.30) + (Seniority * 0.15) + (Location 
 | Signal | Weight | Logic and Constraints |
 |---|---|---|
 | **Title Match** | **40%** | Word-level overlap against target roles (handles initialisms like SRE <-> Site Reliability Engineer). **Hard Stop**: if title has no overlap with target roles, overall score is forced to `0.00`. |
-| **Skills Overlap** | **30%** | Evaluates description against technical vocabulary (`aws`, `docker`, `kubernetes`, `terraform`, `linux`, `python`). 3 or more matches equals 100%. |
-| **Seniority** | **15%** | Evaluates Junior, Mid, or Senior tokens. Exact level match = 1.0; adjacent level = 0.5; mismatched level = 0.1. |
+| **Skills Overlap** | **30%** | Evaluates description against technical vocabulary (`aws`, `docker`, `kubernetes`, `terraform`, `linux`, `python`). 3 or more matches equals 100%. If a source provides no description, this signal is neutral (50%) rather than zero so ATS-only jobs remain eligible for auto-apply. |
+| **Seniority** | **15%** | Evaluates Junior, Mid, or Senior tokens in the job title. Exact level match = 1.0; adjacent level = 0.5; mismatched level = 0.1; undetected = 0.6 neutral. |
 | **Location Rules** | **10%** | **Ghana roles:** score 1.0 (on-site or remote).<br/>**Foreign remote roles:** score 0.95.<br/>**Foreign on-site roles:** Hard reject (score 0, status `closed`). |
-| **Recency** | **5%** | Exponential decay curve: `e^(-days / 14)`. New postings receive full score. |
+| **Recency** | **5%** | Exponential decay curve: `e^(-days / 14)`. New postings receive full score; invalid/future dates are treated as neutral. |
 
 ---
 
 ### 3. Resilience and Safety Guardrails
 
 - **Fail-Fast CAPTCHA Detection:** Scans DOM for Cloudflare Turnstile, reCAPTCHA, or hCaptcha prior to form entry. If detected, execution halts immediately and routes the posting to the **Manual Queue** to protect applicant IP reputation.
-- **Attempt-Based Rate Limiting:** Form submissions are bounded by `max_auto_apply_per_run` (default: 5 to 10 per run) to maintain human-like application pacing.
+- **Attempt-Based Rate Limiting:** Form submissions are bounded by `max_auto_apply_per_run` (default: 5 per run) to maintain human-like application pacing.
 - **Manual Queue Safe Routing:** Roles on unsupported platforms, custom career sites, or requiring manual clarification are safely staged in the Manual Queue for 1-click candidate review.
 
 ---

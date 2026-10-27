@@ -1,6 +1,6 @@
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { toIsoDate, extractLocationFromText } from './utils.js';
+import { toIsoDate, extractLocationFromText, stripHtml } from './utils.js';
 
 /**
  * Otta connector (otta.com — now part of Workable).
@@ -65,14 +65,14 @@ export class OttaConnector implements Connector {
           ? `https://app.otta.com/jobs/${companySlug}/${jobSlug}`
           : '');
 
+        const description = stripHtml(item.description ?? item.short_description ?? null);
         const locationNames = (item.locations ?? []).map(l => l.name).filter(Boolean).join(', ');
         const rawLocation = locationNames ||
           (item.remote ? 'Remote' : null) ||
-          extractLocationFromText(item.short_description ?? '') ||
+          extractLocationFromText(description ?? '') ||
           null;
 
         const skills = (item.skills ?? []).map(s => s.name).filter(Boolean) as string[];
-        const description = item.description ?? item.short_description ?? null;
 
         const rawDate = item.posted_at ?? item.created_at ?? null;
 

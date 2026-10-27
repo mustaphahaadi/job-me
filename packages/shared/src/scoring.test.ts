@@ -24,6 +24,84 @@ describe('scoreJob', () => {
     expect(result.score).toBeGreaterThan(0.7);
     expect(result.breakdown.negative_keyword_hit).toBe(false);
     expect(result.breakdown.title_match.score).toBeGreaterThan(0.5);
+    expect(result.breakdown.skills_overlap.description_available).toBe(true);
+  });
+
+  it('keeps jobs without a description eligible for auto-apply (neutral skills signal)', () => {
+    const noDescriptionJob: NormalizedJob = {
+      ...baseJob,
+      description: null,
+      raw_location: 'Remote',
+    };
+
+    const result = scoreJob(noDescriptionJob, {
+      targetRoles: ['Cloud Engineer'],
+      acceptedLocations: ['remote'],
+      targetSeniority: 'senior',
+    });
+
+    expect(result.breakdown.skills_overlap.description_available).toBe(false);
+    expect(result.breakdown.skills_overlap.score).toBe(0.5);
+    expect(result.score).toBeGreaterThan(0.75);
+  });
+
+  it('treats invalid and future posted dates as neutral instead of producing NaN or >1', () => {
+    const invalidDateJob: NormalizedJob = {
+      ...baseJob,
+      posted_date: 'not-a-real-date',
+    };
+    const futureDateJob: NormalizedJob = {
+      ...baseJob,
+      posted_date: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    };
+
+    const invalid = scoreJob(invalidDateJob, {
+      targetRoles: ['Cloud Engineer'],
+      acceptedLocations: ['remote'],
+    });
+    const future = scoreJob(futureDateJob, {
+      targetRoles: ['Cloud Engineer'],
+      acceptedLocations: ['remote'],
+    });
+
+    expect(Number.isNaN(invalid.score)).toBe(false);
+    expect(invalid.breakdown.recency.score).toBe(0.5);
+    expect(future.breakdown.recency.score).toBe(0.5);
+    expect(future.breakdown.recency.days_old).toBe(-1);
+    expect(future.score).toBeLessThanOrEqual(1);
+  });
+
+  it('does not treat a location containing a Ghana keyword as a substring as Ghana', () => {
+    const temasekJob: NormalizedJob = {
+      ...baseJob,
+      title: 'DevOps Engineer',
+      raw_location: 'Temasek, Singapore',
+      description: 'Fully remote role with AWS and Kubernetes.',
+    };
+
+    const result = scoreJob(temasekJob, {
+      targetRoles: ['DevOps Engineer'],
+      acceptedLocations: ['remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(true);
+    expect(result.breakdown.location.score).toBe(0.95);
+  });
+
+  it('does not detect seniority from a generic mention in the description', () => {
+    const job: NormalizedJob = {
+      ...baseJob,
+      title: 'Cloud Engineer',
+      description: 'You will collaborate with senior engineers across the platform team.',
+    };
+
+    const result = scoreJob(job, {
+      targetRoles: ['Cloud Engineer'],
+      targetSeniority: 'mid',
+      acceptedLocations: ['remote'],
+    });
+
+    expect(result.breakdown.seniority.detected_level).toBe(null);
   });
 
   it('forces score to 0 when negative keyword matches', () => {
@@ -190,6 +268,86 @@ describe('scoreJob', () => {
     const result = scoreJob(saHybridJob, {
       targetRoles: ['Site Reliability Engineer'],
       acceptedLocations: ['South Africa', 'remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('does not treat "Hybrid Cloud" in a title as an on-site indicator', () => {
+    const hybridCloudJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Hybrid Cloud Engineer',
+      raw_location: 'Remote',
+      description: 'Build hybrid cloud platforms with AWS and Kubernetes.',
+    };
+
+    const result = scoreJob(hybridCloudJob, {
+      targetRoles: ['Cloud Engineer'],
+      acceptedLocations: ['remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(true);
+    expect(result.breakdown.location.score).toBe(0.95);
+  });
+
+  it('does not treat "Distributed Systems" or "Global" in a title as remote', () => {
+    const distributedJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Distributed Systems Engineer',
+      raw_location: 'London, United Kingdom',
+      description: 'Build and operate distributed systems for our platform.',
+    };
+    const globalJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Global Infrastructure Engineer',
+      raw_location: 'London, United Kingdom',
+      description: 'Manage our global infrastructure estate.',
+    };
+
+    const distributed = scoreJob(distributedJob, {
+      targetRoles: ['Systems Engineer'],
+      acceptedLocations: ['remote'],
+    });
+    const global = scoreJob(globalJob, {
+      targetRoles: ['Infrastructure Engineer'],
+      acceptedLocations: ['remote'],
+    });
+
+    expect(distributed.breakdown.location.accepted).toBe(false);
+    expect(distributed.score).toBe(0);
+    expect(global.breakdown.location.accepted).toBe(false);
+    expect(global.score).toBe(0);
+  });
+
+  it('still rejects a remote title when the location explicitly says hybrid', () => {
+    const hybridLocationJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Cloud Engineer (Remote)',
+      raw_location: 'London, United Kingdom (Hybrid)',
+      description: 'Cloud engineering role.',
+    };
+
+    const result = scoreJob(hybridLocationJob, {
+      targetRoles: ['Cloud Engineer'],
+      acceptedLocations: ['remote'],
+    });
+
+    expect(result.breakdown.location.accepted).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('does not treat a negated remote phrase in the description as remote', () => {
+    const onSiteJob: NormalizedJob = {
+      ...baseJob,
+      title: 'Cloud Engineer',
+      raw_location: 'London, United Kingdom',
+      description: 'This is not a remote position. You will work from our London office.',
+    };
+
+    const result = scoreJob(onSiteJob, {
+      targetRoles: ['Cloud Engineer'],
+      acceptedLocations: ['remote'],
     });
 
     expect(result.breakdown.location.accepted).toBe(false);

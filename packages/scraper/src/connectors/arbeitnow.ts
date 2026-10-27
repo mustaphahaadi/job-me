@@ -1,7 +1,7 @@
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
 import { parseTitleAndCompany } from './rss.js';
-import { toIsoDate, extractLocationFromText } from './utils.js';
+import { toIsoDate, extractLocationFromText, stripHtml } from './utils.js';
 
 /**
  * Arbeitnow connector — https://www.arbeitnow.com/api/job-board-api
@@ -49,9 +49,9 @@ export class ArbeitnowConnector implements Connector {
     const rawCompany = String(item['company_name'] ?? '');
     const { title, company } = parseTitleAndCompany(rawTitle, rawCompany || null);
 
-    const description = String(item['description'] ?? '');
+    const description = stripHtml(String(item['description'] ?? ''));
     const rawLoc = String(item['location'] ?? '');
-    const raw_location = rawLoc || extractLocationFromText(description) || 'Remote';
+    const raw_location = rawLoc || extractLocationFromText(description ?? '') || 'Remote';
 
     const rawDate = item['created_at'] ?? null;
 

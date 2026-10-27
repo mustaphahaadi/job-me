@@ -35,9 +35,16 @@ export default function CvVersions() {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file || !label.trim()) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Please upload a PDF file. The auto-apply connectors upload this file directly to ATS forms.');
+      return;
+    }
+
     setUploading(true);
 
-    const filePath = `${Date.now()}-${file.name}`;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${Date.now()}-${safeName}`;
     const { error: uploadErr } = await supabase.storage.from('cv-files').upload(filePath, file);
     if (uploadErr) {
       alert(`Upload failed: ${uploadErr.message}`);
@@ -45,12 +52,20 @@ export default function CvVersions() {
       return;
     }
 
-    const { data } = await supabase.from('cv_versions').insert({
+    const { data, error: insertErr } = await supabase.from('cv_versions').insert({
       label: label.trim(),
       file_path: filePath,
       role_tags: roleTags,
       is_default_for: isDefaultFor,
     }).select().single();
+
+    if (insertErr) {
+      // Do not leave an orphaned object in storage if metadata insertion fails.
+      await supabase.storage.from('cv-files').remove([filePath]);
+      alert(`Could not save CV metadata: ${insertErr.message}`);
+      setUploading(false);
+      return;
+    }
 
     if (data) setCvVersions(prev => [data as CvVersion, ...prev]);
     setLabel('');
@@ -85,12 +100,13 @@ export default function CvVersions() {
   async function handleDelete(cv: CvVersion) {
     if (!confirm(`Delete "${cv.label}"? This cannot be undone.`)) return;
     setDeletingId(cv.id);
-    // Remove from storage
-    await supabase.storage.from('cv-files').remove([cv.file_path]);
+    // Delete the DB row first so a storage failure cannot leave a row pointing
+    // at a missing file. An orphaned storage object is harmless and cleanable.
     const { error } = await supabase.from('cv_versions').delete().eq('id', cv.id);
     if (error) {
       alert(`Failed to delete: ${error.message}`);
     } else {
+      await supabase.storage.from('cv-files').remove([cv.file_path]);
       setCvVersions(prev => prev.filter(c => c.id !== cv.id));
     }
     setDeletingId(null);
@@ -121,7 +137,7 @@ export default function CvVersions() {
           </div>
           <div className={styles.field}>
             <label className={styles.fieldLabel} htmlFor="cv-file">File (PDF)</label>
-            <input id="cv-file" className={styles.fileInput} type="file" accept=".pdf,.doc,.docx" required ref={fileRef} />
+            <input id="cv-file" className={styles.fileInput} type="file" accept=".pdf,application/pdf" required ref={fileRef} />
           </div>
         </div>
 

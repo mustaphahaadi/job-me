@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import type { Job, CvVersion } from '@job-me/shared';
 import type { AutoApplyConnector } from './base.js';
-import { detectCaptcha, captchaError } from './base.js';
+import { detectCaptcha, captchaError, getApplicant, isHeadless } from './base.js';
 
 /**
  * Greenhouse ATS auto-apply connector.
@@ -18,17 +18,14 @@ import { detectCaptcha, captchaError } from './base.js';
  */
 export class GreenhouseConnector implements AutoApplyConnector {
   async apply(job: Job, cv: CvVersion | null, coverLetter: string | null | undefined, cvFilePath: string): Promise<void> {
-    const FIRST_NAME = process.env['APPLICANT_FIRST_NAME'] || 'Applicant';
-    const LAST_NAME  = process.env['APPLICANT_LAST_NAME']  || 'User';
-    const EMAIL      = process.env['APPLICANT_EMAIL']      || 'applicant@example.com';
-    const PHONE      = process.env['APPLICANT_PHONE']      || '+233201234567';
+    const applicant = getApplicant();
     const CV_PATH    = cvFilePath || process.env['CV_FILE_PATH'];
 
     if (!CV_PATH) {
       throw new Error('CV_FILE_PATH not set — upload a CV on the /cv page or set CV_FILE_PATH in env.');
     }
 
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ headless: isHeadless() });
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     });
@@ -45,12 +42,12 @@ export class GreenhouseConnector implements AutoApplyConnector {
 
       await page.waitForSelector(firstNameSelector, { timeout: 15_000 });
 
-      await page.fill(firstNameSelector, FIRST_NAME);
-      await page.fill(lastNameSelector,  LAST_NAME);
-      await page.fill(emailSelector,     EMAIL);
+      await page.fill(firstNameSelector, applicant.firstName);
+      await page.fill(lastNameSelector,  applicant.lastName);
+      await page.fill(emailSelector,     applicant.email);
 
       const phoneInput = await page.$(phoneSelector);
-      if (phoneInput && PHONE) await page.fill(phoneSelector, PHONE);
+      if (phoneInput && applicant.phone) await page.fill(phoneSelector, applicant.phone);
 
       // ── Step 2: Upload CV ───────────────────────────────────────
       const fileInput = await page.$('input[type="file"]');
@@ -80,21 +77,16 @@ export class GreenhouseConnector implements AutoApplyConnector {
       await submitBtn.click();
 
       // ── Step 5: Confirm submission ──────────────────────────────
-      // Greenhouse typically shows one of several confirmation messages
+      // Require an explicit confirmation. A URL change alone is not proof:
+      // validation errors and login redirects also change the URL.
       const confirmed = await Promise.any([
-        page.waitForSelector('text=Application submitted', { timeout: 15_000 }).then(() => true),
-        page.waitForSelector('text=Thank you', { timeout: 15_000 }).then(() => true),
-        page.waitForSelector('text=application has been received', { timeout: 15_000 }).then(() => true),
-        page.waitForURL(url => !url.href.includes('/apply'), { timeout: 15_000 }).then(() => true),
+        page.waitForSelector('text=/application (has been )?submitted/i', { timeout: 15_000 }).then(() => true),
+        page.waitForSelector('text=/application (has been )?received/i', { timeout: 15_000 }).then(() => true),
+        page.waitForSelector('text=/thank you for applying/i', { timeout: 15_000 }).then(() => true),
       ]).catch(() => false);
 
       if (!confirmed) {
-        const finalUrl = page.url();
-        if (finalUrl === job.url || finalUrl.includes('/apply')) {
-          throw new Error(
-            'Application may not have submitted — no confirmation text found and URL did not change.'
-          );
-        }
+        throw new Error('Application may not have submitted — no confirmation text found.');
       }
 
     } finally {

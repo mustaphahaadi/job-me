@@ -1,6 +1,6 @@
 import type { Source, NormalizedJob, Settings } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { buildUrl, isJobRelevantToProfile } from './utils.js';
+import { buildUrl, isJobRelevantToProfile, stripHtml } from './utils.js';
 
 type LeverPosting = {
   id?: string;
@@ -14,6 +14,8 @@ type LeverPosting = {
   };
   workplaceType?: string;
   createdAt?: number;
+  descriptionPlain?: string;
+  description?: string;
 };
 
 /**
@@ -48,15 +50,16 @@ export class LeverApiConnector implements Connector {
         const loc = p.workplaceType === 'remote'
           ? `Remote - ${p.categories?.location ?? ''}`
           : (p.categories?.location ?? '');
-        return isJobRelevantToProfile(title, loc, settings);
+        const description = p.descriptionPlain?.trim() || stripHtml(p.description);
+        return isJobRelevantToProfile(title, loc, settings, description);
       })
       .map((p): NormalizedJob => ({
         title: (p.text ?? '').trim() || 'Untitled Job',
         company: companyName,
         url: p.applyUrl ?? p.hostedUrl!,
         posted_date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0]! : null,
-        description: null,
-        raw_location: p.workplaceType === 'remote' ? 'Remote' : (p.categories?.location ?? 'Remote'),
+        description: p.descriptionPlain?.trim() || stripHtml(p.description),
+        raw_location: p.workplaceType === 'remote' ? 'Remote' : (p.categories?.location ?? null),
         raw_tags: [p.categories?.team, p.categories?.department].filter(Boolean) as string[],
       }));
   }

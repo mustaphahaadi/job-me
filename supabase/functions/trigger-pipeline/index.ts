@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Dispatches the scrape.yml GitHub Actions workflow (the full pipeline run).
 // Replaces the old VITE_GITHUB_PAT client-side trigger: the PAT now lives only
-// in this function's secrets, and only an authenticated session can invoke it.
+// in this function's secrets and never reaches the browser bundle.
 //
 // Deploy (this app has no login flow, so deploy WITHOUT JWT verification):
 //   supabase functions deploy trigger-pipeline --no-verify-jwt
@@ -16,26 +16,40 @@
 //   GITHUB_REPO   — owner/repo
 //   GITHUB_BRANCH  — optional, defaults to main
 //
-// Auth: the app runs on the anon key without a login flow, so the function
-// is deployed with --no-verify-jwt. The Authorization header check below
-// still rejects header-less requests (defence in depth).
+// Auth: the app runs on the anon/publishable key without a login flow, so the
+// function is deployed with --no-verify-jwt. The header check below still
+// rejects header-less requests (defence in depth). The GitHub PAT never leaves
+// this function.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
+
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed — use POST.' }, 405);
   }
 
+  // New-format Supabase publishable keys are sent as `apikey` rather than as a
+  // bearer token by supabase-js, so accept either header.
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return json({ error: 'Unauthorized — missing bearer token.' }, 401);
+  const apiKey = req.headers.get('apikey');
+  if (!authHeader?.startsWith('Bearer ') && !apiKey) {
+    return json({ error: 'Unauthorized — missing bearer token or apikey.' }, 401);
   }
 
   const ghToken = Deno.env.get('GH_TOKEN');

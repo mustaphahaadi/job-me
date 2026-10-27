@@ -25,7 +25,7 @@ import type { Connector } from '../connectors/base.js';
  * Every source is scraped with the /settings configuration applied:
  *   1. {roles} / {role} / {locations} / {location} / {days}
  *      placeholders in base_url and query_params are substituted
- *      from settings (works for all 9 connector types).
+ *      from settings (works for all connector types).
  *   2. Sources with no query_params at all get settings-derived
  *      defaults (first target role, first accepted location,
  *      days_posted_default recency window).
@@ -140,14 +140,20 @@ function settingsDerivedParams(type: Source['type'], settings: Settings): Record
   }
 }
 
+const URL_LOOKUP_CHUNK_SIZE = 50;
+const WRITE_CHUNK_SIZE = 50;
+
 /**
  * Batch upserts jobs keyed on URL.
  * Never resets a job that's already progressed past 'new' back to 'new' (§8.2).
  *
- * Strategy (3 queries instead of 2N):
- *   1. Fetch all existing job URLs for this source in one query.
- *   2. Batch INSERT new jobs.
- *   3. Batch UPDATE description/posted_date for existing jobs.
+ * Chunked batch strategy (avoids PostgREST URL/body size limits):
+ *   1. Fetch existing job URLs in chunks of 50.
+ *   2. Batch INSERT new jobs in chunks of 50.
+ *   3. Batch UPDATE description/posted_date for existing jobs in chunks of 50.
+ *
+ * Descriptions can be several KB each, so smaller write chunks keep requests
+ * comfortably below the API gateway body limit.
  */
 async function upsertJobs(
   supabase: SupabaseClient,
@@ -159,18 +165,37 @@ async function upsertJobs(
   if (validJobs.length === 0) return;
 
   const scoringOptions = settings ? optionsFromSettings(settings) : null;
-  const urls = validJobs.map(j => j.url);
+  const urls = [...new Set(validJobs.map(j => j.url))];
 
-  // 1. Fetch existing URLs in one query
-  const { data: existing } = await supabase
-    .from('jobs')
-    .select('id, url')
-    .in('url', urls);
+  // 1. Fetch existing URLs in chunks. PostgREST puts `.in()` values in the URL,
+  //    so a single query with hundreds of job URLs can exceed the request limit.
+  //    Keep the existing values so a source that omits a field on a later scrape
+  //    cannot erase a description, location, or posted date we already have.
+  type ExistingJob = {
+    url: string;
+    title: string;
+    company: string | null;
+    description: string | null;
+    posted_date: string | null;
+    raw_location: string | null;
+  };
+  const existingByUrl = new Map<string, ExistingJob>();
+  for (const chunk of chunkArray(urls, URL_LOOKUP_CHUNK_SIZE)) {
+    const { data: existing, error } = await supabase
+      .from('jobs')
+      .select('url, title, company, description, posted_date, raw_location')
+      .in('url', chunk);
 
-  const existingUrlSet = new Set((existing ?? []).map((r: { url: string }) => r.url));
+    if (error) {
+      throw new Error(`[scrape] Failed to look up existing jobs: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
+    }
+    for (const row of (existing ?? []) as ExistingJob[]) {
+      existingByUrl.set(row.url, row);
+    }
+  }
 
-  const toInsertRaw = validJobs.filter(j => !existingUrlSet.has(j.url));
-  const toUpdateRaw = validJobs.filter(j => existingUrlSet.has(j.url));
+  const toInsertRaw = validJobs.filter(j => !existingByUrl.has(j.url));
+  const toUpdateRaw = validJobs.filter(j => existingByUrl.has(j.url));
 
   // Deduplicate new jobs by URL to prevent batch insert key conflicts
   const seenInsert = new Set<string>();
@@ -220,9 +245,18 @@ async function upsertJobs(
       };
     });
 
-    const { error } = await supabase.from('jobs').insert(rows);
-    if (error) console.error(`[scrape] Batch insert error: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
-    else console.log(`[scrape] Inserted and scored ${toInsert.length} new job(s).`);
+    let insertedCount = 0;
+    for (const chunk of chunkArray(rows, WRITE_CHUNK_SIZE)) {
+      const { error } = await supabase.from('jobs').insert(chunk);
+      if (error) {
+        console.error(`[scrape] Batch insert error: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
+        break;
+      }
+      insertedCount += chunk.length;
+    }
+    if (insertedCount > 0) {
+      console.log(`[scrape] Inserted and scored ${insertedCount} new job(s).`);
+    }
   }
 
   // 3. Batch update existing jobs — include title, company, source_id, raw_location so Postgres
@@ -235,29 +269,60 @@ async function upsertJobs(
         seenUpdate.add(u.url);
         return true;
       })
-      .map(u => ({
-        url: u.url,
-        title: u.title,
-        company: u.company,
-        source_id: sourceId,
-        raw_location: u.raw_location,
-        description: u.description,
-        posted_date: u.posted_date,
-      }));
+      .map(u => {
+        const prev = existingByUrl.get(u.url);
+        return {
+          url: u.url,
+          title: u.title?.trim() ? u.title : prev?.title ?? u.title,
+          company: u.company?.trim() ? u.company : prev?.company ?? null,
+          source_id: sourceId,
+          raw_location: u.raw_location?.trim() ? u.raw_location : prev?.raw_location ?? null,
+          description: u.description?.trim() ? u.description : prev?.description ?? null,
+          posted_date: u.posted_date?.trim() ? u.posted_date : prev?.posted_date ?? null,
+        };
+      });
 
-    const { error: upsertErr } = await supabase.from('jobs').upsert(rows, { onConflict: 'url' });
-    if (upsertErr) {
-      console.error(`[scrape] Batch update error: ${String(upsertErr.message).replace(/[\r\n]/g, ' ')}`);
-    } else {
-      console.log(`[scrape] Updated ${rows.length} existing job(s).`);
+    let updatedCount = 0;
+    for (const chunk of chunkArray(rows, WRITE_CHUNK_SIZE)) {
+      const { error: upsertErr } = await supabase.from('jobs').upsert(chunk, { onConflict: 'url' });
+      if (upsertErr) {
+        console.error(`[scrape] Batch update error: ${String(upsertErr.message).replace(/[\r\n]/g, ' ')}`);
+        break;
+      }
+      updatedCount += chunk.length;
+    }
+    if (updatedCount > 0) {
+      console.log(`[scrape] Updated ${updatedCount} existing job(s).`);
     }
   }
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/** Parses a source URL hostname without throwing on malformed configuration. */
+function sourceHostname(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function hostMatchesDomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 function getConnector(source: Source): Connector {
-  if (source.type === 'greenhouse' || source.base_url.includes('greenhouse.io')) return new GreenhouseApiConnector();
-  if (source.type === 'ashby' || source.base_url.includes('ashbyhq.com')) return new AshbyApiConnector();
-  if (source.type === 'lever' || source.base_url.includes('lever.co')) return new LeverApiConnector();
+  const host = sourceHostname(source.base_url);
+  if (source.type === 'greenhouse' || hostMatchesDomain(host, 'greenhouse.io')) return new GreenhouseApiConnector();
+  if (source.type === 'ashby' || hostMatchesDomain(host, 'ashbyhq.com')) return new AshbyApiConnector();
+  if (source.type === 'lever' || hostMatchesDomain(host, 'lever.co')) return new LeverApiConnector();
   if (source.type === 'rss') return new RssConnector();
   if (source.type === 'api') return new ApiConnector();
   if (source.type === 'arbeitnow') return new ArbeitnowConnector();

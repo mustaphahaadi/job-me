@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   url                       text        NOT NULL UNIQUE,
   posted_date               date,
   scraped_at                timestamptz NOT NULL DEFAULT now(),
+  enriched_at               timestamptz,
   description               text,
   raw_location              text,
   match_score               numeric,
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 -- Backfill columns for databases that pre-date migrations 0003 / 0008
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS raw_location       text;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cover_letter_text  text;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS enriched_at        timestamptz;
 
 -- Status check now includes 'manual_applied' (idempotent: drops and re-adds)
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_status_check;
@@ -158,6 +160,7 @@ CREATE INDEX IF NOT EXISTS jobs_status_idx       ON jobs (status);
 CREATE INDEX IF NOT EXISTS jobs_scraped_at_idx   ON jobs (scraped_at DESC);
 CREATE INDEX IF NOT EXISTS jobs_match_score_idx  ON jobs (match_score DESC);
 CREATE INDEX IF NOT EXISTS jobs_source_id_idx    ON jobs (source_id);
+CREATE INDEX IF NOT EXISTS jobs_enriched_at_idx  ON jobs (enriched_at);
 
 
 -- ─── Row Level Security ───────────────────────────────────────────────────────
@@ -237,9 +240,12 @@ CREATE POLICY "storage_delete_cv_files" ON storage.objects
 
 
 -- ─── Seed: job sources ───────────────────────────────────────────────────────
--- Verified working sources. ON CONFLICT DO NOTHING = safe to re-run.
+-- Verified working sources. Safe to re-run: only names that do not already
+-- exist are inserted. ON CONFLICT DO NOTHING was unsafe because `name` had no
+-- unique constraint, so every schema re-run duplicated all sources.
 
-INSERT INTO sources (name, type, base_url, query_params, active) VALUES
+WITH seed (name, type, base_url, query_params, active) AS (
+VALUES
 
   -- ── Remote RSS/API sources ────────────────────────────────────────────────
   ('Remotive — All Remote Jobs',           'rss', 'https://remotive.com/remote-jobs/feed',                                     '{}'::jsonb, true),
@@ -289,5 +295,22 @@ INSERT INTO sources (name, type, base_url, query_params, active) VALUES
 
   -- ── Lever API — direct ATS sources (pre-filtered by profile) ──────────────
   ('Lever — Spotify',         'lever',      'https://api.lever.co/v0/postings/spotify?mode=json',          '{}'::jsonb, true)
+)
+INSERT INTO sources (name, type, base_url, query_params, active)
+SELECT name, type, base_url, query_params, active
+FROM seed
+WHERE NOT EXISTS (
+  SELECT 1 FROM sources existing WHERE existing.name = seed.name
+);
 
-ON CONFLICT DO NOTHING;
+-- Create a unique index when the database is clean. If an older database
+-- already contains duplicate names, skip it rather than failing the migration;
+-- the WHERE NOT EXISTS seed above still prevents new duplicates.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM sources GROUP BY name HAVING count(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS sources_name_uniq ON sources (name);
+  END IF;
+END $$;

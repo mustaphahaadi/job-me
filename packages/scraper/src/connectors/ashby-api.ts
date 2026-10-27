@@ -1,6 +1,6 @@
 import type { Source, NormalizedJob, Settings } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { buildUrl, isJobRelevantToProfile } from './utils.js';
+import { buildUrl, isJobRelevantToProfile, stripHtml } from './utils.js';
 
 type AshbyJob = {
   id?: string;
@@ -12,6 +12,8 @@ type AshbyJob = {
   jobUrl?: string;
   applyUrl?: string;
   department?: string;
+  descriptionPlain?: string;
+  descriptionHtml?: string;
 };
 
 /**
@@ -48,15 +50,16 @@ export class AshbyApiConnector implements Connector {
         const urlToUse = j.jobUrl ?? j.applyUrl;
         if (!urlToUse || !title) return false;
         const loc = j.isRemote || j.workplaceType === 'Remote' ? `Remote - ${j.location ?? ''}` : (j.location ?? '');
-        return isJobRelevantToProfile(title, loc, settings);
+        const description = j.descriptionPlain?.trim() || stripHtml(j.descriptionHtml);
+        return isJobRelevantToProfile(title, loc, settings, description);
       })
       .map((j): NormalizedJob => ({
         title: (j.title ?? '').trim() || 'Untitled Job',
         company: companyName,
         url: j.jobUrl ?? j.applyUrl!,
         posted_date: j.publishedAt ? j.publishedAt.split('T')[0]! : null,
-        description: null,
-        raw_location: j.isRemote || j.workplaceType === 'Remote' ? 'Remote' : (j.location ?? 'Remote'),
+        description: j.descriptionPlain?.trim() || stripHtml(j.descriptionHtml),
+        raw_location: j.isRemote || j.workplaceType === 'Remote' ? 'Remote' : (j.location ?? null),
         raw_tags: j.department ? [j.department] : [],
       }));
   }

@@ -144,7 +144,7 @@ export default function Sources() {
       if (ok) alert('Triggered pipeline scrape run for all active sources via GitHub Actions.');
     } catch (err) {
       console.error('[handleRunAll] failed:', err);
-      alert('Failed to trigger scrape run. Check the VITE_GITHUB_PAT setting.');
+      alert('Failed to trigger scrape run. Check the trigger-pipeline Edge Function deployment and secrets.');
     } finally {
       setTriggeringId(null);
     }

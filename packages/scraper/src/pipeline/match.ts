@@ -15,28 +15,37 @@ import { scoreJob, optionsFromSettings, getOrInitSettings, MATCH_PROMOTION_THRES
  *                      runs caused status flapping)
  *   - 'manual_queue' → never auto-promoted — failed auto-apply jobs live here
  *                      and re-queueing is an explicit user action (Re-queue in
- *                      the drawer). Still re-scored; closed if rules reject it.
+ *                      the drawer). Still re-scored; closed only on hard rule
+ *                      violations, not on low suitability.
  *   - anything       → 'closed' on negative keyword / rejected location / low score
+ *                      (low-score closure does not apply to manual_queue)
  */
 export async function runMatch(supabase: SupabaseClient): Promise<void> {
   const settings = await getOrInitSettings(supabase);
   const scoringOptions = optionsFromSettings(settings);
 
-  let allJobs: Job[] = [];
-  let page = 0;
+  const allJobs: Job[] = [];
   const pageSize = 1000;
+  let lastId: string | null = null;
   while (true) {
-    const { data: batch, error } = await supabase
+    // Keyset pagination by id, not offset/range: this loop changes statuses as
+    // it goes, so an offset page would skip rows when earlier jobs leave the
+    // new/matched/manual_queue filter.
+    let query = supabase
       .from('jobs')
       .select('*')
       .in('status', ['new', 'matched', 'manual_queue'])
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (lastId) query = query.gt('id', lastId);
 
+    const { data: batch, error } = await query;
     if (error) throw new Error(`[match] Failed to fetch jobs for scoring: ${String(error.message).replace(/[\r\n]/g, ' ')}`);
     if (!batch || batch.length === 0) break;
-    allJobs = allJobs.concat(batch as Job[]);
+
+    allJobs.push(...(batch as Job[]));
+    lastId = (batch[batch.length - 1] as Job).id;
     if (batch.length < pageSize) break;
-    page++;
   }
 
   if (allJobs.length === 0) {
@@ -66,7 +75,10 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
       const { score, breakdown } = scoreJob(normalized, scoringOptions);
 
       const isMatched = score >= MATCH_PROMOTION_THRESHOLD && breakdown.location.accepted;
-      const isLowScore = score < 0.25;
+      // A manual_queue job is a failed auto-apply the user may still want to
+      // review by hand. Low suitability alone must not close it; only hard
+      // rule violations (negative keyword / rejected location) do.
+      const isLowScore = score < 0.25 && job.status !== 'manual_queue';
 
       let finalStatus: JobStatus = job.status;
 
@@ -84,7 +96,7 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
         unchanged++;
       }
 
-      await supabase.from('jobs').update({
+      const { error: updateErr } = await supabase.from('jobs').update({
         match_score: score,
         match_breakdown: breakdown,
         matched_keywords: [
@@ -93,6 +105,9 @@ export async function runMatch(supabase: SupabaseClient): Promise<void> {
         ],
         status: finalStatus,
       }).eq('id', job.id);
+      if (updateErr) {
+        console.error(`[match] Failed to update job ${job.id}: ${String(updateErr.message).replace(/[\r\n]/g, ' ')}`);
+      }
     }));
   }
 

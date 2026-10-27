@@ -27,13 +27,20 @@
   z-index: 50;
   overflow-y: auto;
   transform: translateX(100%);
-  transition: transform var(--duration-drawer) var(--ease-drawer);
+  visibility: hidden;
+  transition:
+    transform var(--duration-drawer) var(--ease-drawer),
+    visibility 0s linear var(--duration-drawer);
   display: flex;
   flex-direction: column;
 }
 
 .open {
   transform: translateX(0);
+  visibility: visible;
+  transition:
+    transform var(--duration-drawer) var(--ease-drawer),
+    visibility 0s linear 0s;
 }
 
 /* ── Header ───────────────────────────────────────────────────*/

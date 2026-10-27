@@ -210,7 +210,7 @@ export default function SettingsPage() {
         {/* ── Accepted locations ───────────────────────────────────── */}
         <section className={styles.section} id="settings-locations">
           <h2 className={styles.sectionTitle}>Accepted locations</h2>
-          <p className={styles.sectionDesc}>Jobs whose location matches none of these terms are rejected and closed by the match step (remote and Ghana locations are prioritised when listed). Use lowercase terms like "remote", "ghana", "nigeria". An empty list accepts all locations.</p>
+          <p className={styles.sectionDesc}>Ghana roles are accepted on-site or remote; roles outside Ghana must be remote. Include a Ghana term (e.g. "ghana", "accra") to allow Ghana on-site roles and a remote term (e.g. "remote", "worldwide") to allow remote roles. An empty list accepts both families.</p>
           <div className={styles.roleList}>
             {(settings.accepted_locations ?? []).map(loc => (
               <div key={loc} className={styles.roleTag}>
@@ -279,7 +279,7 @@ export default function SettingsPage() {
         {/* ── Skill vocabulary ─────────────────────────────────────── */}
         <section className={styles.section} id="settings-skill-vocabulary">
           <h2 className={styles.sectionTitle}>Skill vocabulary</h2>
-          <p className={styles.sectionDesc}>Skills matched against job descriptions for the Skills Overlap scoring signal (30% weight). Add skills from your CV to improve match accuracy.</p>
+          <p className={styles.sectionDesc}>Skills matched against job descriptions for the Skills Overlap scoring signal (30% weight). Add skills from your CV to improve match accuracy. When a source provides no description, the skills signal is neutral (50%) rather than zero.</p>
           <div className={styles.roleList}>
             {(settings.skill_vocabulary ?? DEFAULT_SKILL_VOCABULARY).map(skill => (
               <div key={skill} className={styles.roleTag}>
@@ -317,8 +317,9 @@ export default function SettingsPage() {
         <section className={styles.section} id="settings-auto-apply-threshold">
           <h2 className={styles.sectionTitle}>Auto-apply score threshold</h2>
           <p className={styles.sectionDesc}>
-            Jobs must score at or above this threshold to be eligible for auto-apply.
-            Below this, jobs always go to Manual Queue regardless of whether a connector exists.
+            Jobs at or above this threshold in the Matched stage are eligible for auto-apply.
+            Matched jobs below it are never auto-applied and remain available for manual review.
+            Only recognised ATS domains are filled automatically — other apply pages go to Manual Queue.
           </p>
           <div className={styles.sliderRow}>
             <input id="settings-threshold-range" className={styles.range} type="range" min={0} max={100}

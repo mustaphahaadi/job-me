@@ -77,7 +77,7 @@ function MatchBreakdownSection({ breakdown, totalScore, threshold }: {
       </h3>
       <div className={styles.breakdownList}>
         <BreakdownRow label="Title"    score={breakdown.title_match.score}   weight={breakdown.title_match.weight}   detail={breakdown.title_match.matched_keywords.join(', ') || 'No match'} />
-        <BreakdownRow label="Skills"   score={breakdown.skills_overlap.score} weight={breakdown.skills_overlap.weight} detail={breakdown.skills_overlap.matched_skills.slice(0, 5).join(', ')} />
+        <BreakdownRow label="Skills"   score={breakdown.skills_overlap.score} weight={breakdown.skills_overlap.weight} detail={breakdown.skills_overlap.description_available === false ? 'No description (neutral score)' : breakdown.skills_overlap.matched_skills.slice(0, 5).join(', ') || 'No match'} />
         <BreakdownRow label="Seniority" score={breakdown.seniority.score}    weight={breakdown.seniority.weight}     detail={breakdown.seniority.detected_level ?? 'Not detected'} />
         <BreakdownRow label="Location" score={breakdown.location.score}      weight={breakdown.location.weight}      detail={breakdown.location.accepted ? 'Accepted' : 'Outside accepted'} />
         <BreakdownRow label="Recency"  score={breakdown.recency.score}       weight={breakdown.recency.weight}       detail={breakdown.recency.days_old >= 0 ? `${breakdown.recency.days_old}d old` : 'Date unknown'} />
@@ -121,10 +121,19 @@ export function JobDetailDrawer({
   onMarkApplied, onMarkResponded, onDismiss, onRequeue, onSwapCv, onDelete,
 }: Props) {
   const drawerRef = useRef<HTMLElement>(null);
+  const jobId = job?.id;
 
   useEffect(() => {
-    if (!job) return;
+    if (!jobId) return;
     const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    // Move focus into the dialog when it opens so keyboard/screen-reader users
+    // are not left behind on the card that opened it.
+    const focusTimer = window.setTimeout(() => {
+      const panel = drawerRef.current;
+      const closeBtn = panel?.querySelector<HTMLElement>('#drawer-close-btn');
+      (closeBtn ?? panel)?.focus();
+    }, 0);
 
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'Escape') { onClose(); return; }
@@ -143,8 +152,11 @@ export function JobDetailDrawer({
     }
 
     document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [job, onClose]);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [jobId, onClose]);
 
   const isOpen = job !== null;
 
@@ -162,6 +174,7 @@ export function JobDetailDrawer({
         className={`${styles.drawer} ${isOpen ? styles.open : ''}`}
         aria-label="Job detail"
         aria-hidden={!isOpen}
+        aria-modal="true"
         tabIndex={-1}
         role="dialog"
       >
@@ -221,7 +234,7 @@ export function JobDetailDrawer({
                     <CheckCheck size={13} /> Mark responded
                   </button>
                 )}
-                {job.auto_apply_result === 'failed' && (
+                {job.status === 'manual_queue' && (
                   <button id="drawer-requeue-btn" className={`${styles.btn} ${styles.btnSecondary}`} onClick={() => onRequeue(job.id)}>
                     <RotateCcw size={13} /> Re-queue
                   </button>
@@ -238,7 +251,7 @@ export function JobDetailDrawer({
                   <button
                     id="drawer-delete-btn"
                     className={`${styles.btn} ${styles.btnDanger}`}
-                    onClick={() => { onDelete(job.id); onClose(); }}
+                    onClick={() => onDelete(job.id)}
                   >
                     <Trash2 size={13} /> Delete
                   </button>

@@ -1,7 +1,7 @@
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
 import { parseTitleAndCompany } from './rss.js';
-import { buildUrl, toIsoDate, extractLocationFromText } from './utils.js';
+import { buildUrl, toIsoDate, extractLocationFromText, stripHtml } from './utils.js';
 
 /**
  * Generic REST API connector skeleton.
@@ -59,9 +59,9 @@ export class ApiConnector implements Connector {
     // Jobicy uses epoch in 'epoch', RemoteOK uses 'epoch' too; Arbeitnow uses 'created_at' (unix); Remotive uses 'publication_date'
     const rawDate = item['pubDate'] ?? item['publication_date'] ?? item['date'] ?? item['created'] ?? item['created_at'] ?? item['epoch'] ?? null;
 
-    const description = String(
+    const description = stripHtml(String(
       item['jobDescription'] ?? item['description'] ?? item['summary'] ?? item['details'] ?? item['jobExcerpt'] ?? ''
-    );
+    ));
 
     // Jobicy uses 'jobGeo', Remotive uses 'candidate_required_location', Arbeitnow uses 'location', RemoteOK uses 'location'
     const rawLoc = String(
@@ -74,7 +74,7 @@ export class ApiConnector implements Connector {
       ) ?? ''
     );
 
-    const raw_location = rawLoc || extractLocationFromText(description) || '';
+    const raw_location = rawLoc || extractLocationFromText(description ?? '') || '';
 
     return {
       title: title || 'Untitled Job',

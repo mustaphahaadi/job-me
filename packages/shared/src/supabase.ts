@@ -23,30 +23,47 @@ export function createSupabaseClient(url: string, key: string): SupabaseClient {
  * Safely fetches the settings row (id=1) from Supabase.
  * If the row is missing in the database, it automatically initializes/inserts
  * DEFAULT_SETTINGS so background pipeline runs do not crash.
+ *
+ * A select error is treated as fatal for this call: returning in-memory
+ * defaults is safe, but writing them would overwrite the user's real settings
+ * during a transient outage. Initialization uses INSERT (not UPSERT) and
+ * re-reads on a race so two pipeline runs cannot clobber each other.
  */
 export async function getOrInitSettings(supabase: SupabaseClient): Promise<Settings> {
-  const { data: settingsData } = await supabase
+  const { data: settingsData, error: selectError } = await supabase
     .from('settings')
     .select('*')
     .eq('id', 1)
     .maybeSingle();
 
+  if (selectError) {
+    console.warn(`[settings] Could not read settings (${String(selectError.message).replace(/[\r\n]/g, ' ')}). Using in-memory defaults.`);
+    return DEFAULT_SETTINGS;
+  }
+
   if (settingsData) return settingsData as Settings;
 
   console.log('[settings] Settings row (id=1) not found in database. Seeding default settings...');
 
-  const { data: inserted, error } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from('settings')
-    .upsert(DEFAULT_SETTINGS)
+    .insert(DEFAULT_SETTINGS)
     .select()
     .single();
 
-  if (error || !inserted) {
-    console.warn(`[settings] Could not auto-insert settings row (${String(error?.message ?? 'unknown').replace(/[\r\n]/g, ' ')}). Falling back to in-memory defaults.`);
-    return DEFAULT_SETTINGS;
-  }
+  if (!insertError && inserted) return inserted as Settings;
 
-  return inserted as Settings;
+  // Another process may have inserted the row between our SELECT and INSERT.
+  const { data: retry, error: retryError } = await supabase
+    .from('settings')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (!retryError && retry) return retry as Settings;
+
+  console.warn(`[settings] Could not auto-insert settings row (${String(insertError?.message ?? retryError?.message ?? 'unknown').replace(/[\r\n]/g, ' ')}). Falling back to in-memory defaults.`);
+  return DEFAULT_SETTINGS;
 }
 
 export type { SupabaseClient };

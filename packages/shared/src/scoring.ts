@@ -26,9 +26,6 @@ type TargetSeniority = 'junior' | 'mid' | 'senior' | 'any';
 /** Words that identify a Ghana location in free text. */
 const GHANA_KEYWORDS = ['ghana', 'accra', 'kumasi', 'tema', 'takoradi', 'sekondi', 'cape coast', 'tamale'];
 
-/** Words that identify a remote location in free text. */
-const REMOTE_KEYWORDS = ['remote', 'worldwide', 'anywhere', 'global', 'emea', 'fully remote', '100% remote', 'work from home', 'wfh'];
-
 /**
  * Settings-list words that make a Ghana location acceptable.
  * Checked with `includes` so an accepted entry of "ghana" or "accra" both work.
@@ -121,13 +118,22 @@ function titleMatchScore(jobTitle: string, targetRoles: string[]): { score: numb
 
 function recencyScore(postedDate: string | null): number {
   if (!postedDate) return 0.5;
-  const ageDays = (Date.now() - new Date(postedDate).getTime()) / 86_400_000;
-  return Math.exp(-ageDays / 14);
+  const timestamp = new Date(postedDate).getTime();
+  if (!Number.isFinite(timestamp)) return 0.5;
+
+  const ageDays = (Date.now() - timestamp) / 86_400_000;
+  // More than a day in the future is a source-data error, not a fresh posting.
+  // Allow a small clock-skew tolerance, then clamp the decay to [0, 1].
+  if (ageDays < -1) return 0.5;
+  return Math.min(Math.exp(-Math.max(0, ageDays) / 14), 1);
 }
 
 function daysOld(postedDate: string | null): number {
   if (!postedDate) return -1;
-  return Math.floor((Date.now() - new Date(postedDate).getTime()) / 86_400_000);
+  const timestamp = new Date(postedDate).getTime();
+  if (!Number.isFinite(timestamp)) return -1;
+  if (timestamp > Date.now() + 86_400_000) return -1;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
 }
 
 // ─── Main scoring function ──────────────────────────────────────────────────
@@ -157,6 +163,7 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   const titleLower    = job.title.toLowerCase();
   const descLower     = (job.description ?? '').toLowerCase();
   const locationLower = (job.raw_location ?? '').toLowerCase();
+  const descriptionAvailable = descLower.trim().length > 0;
 
   // ── Negative keyword check (hard stop, whole-word) ──────────────────────
   const negativeFound = textContainsAny(`${titleLower} ${descLower}`, negativeKeywords);
@@ -165,7 +172,7 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
       score: 0,
       breakdown: {
         title_match:    { score: 0, weight: WEIGHTS.title_match,    matched_keywords: [] },
-        skills_overlap: { score: 0, weight: WEIGHTS.skills_overlap, matched_skills: [] },
+        skills_overlap: { score: 0, weight: WEIGHTS.skills_overlap, matched_skills: [], description_available: descriptionAvailable },
         seniority:      { score: 0, weight: WEIGHTS.seniority,      detected_level: null },
         location:       { score: 0, weight: WEIGHTS.location,       accepted: false },
         recency:        { score: 0, weight: WEIGHTS.recency,        days_old: daysOld(job.posted_date) },
@@ -181,13 +188,18 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
 
   // ── Skills overlap (whole-word) ─────────────────────────────────────────
   const matchedSkills = textContainsAny(`${titleLower} ${descLower}`, skillVocabulary);
-  // 3+ matching skills = full score (was 5 — too strict for short descriptions)
-  const skillsScore = Math.min(matchedSkills.length / 3, 1.0);
+  // 3+ matching skills = full score (was 5 — too strict for short descriptions).
+  // A missing description is unknown, not zero: neutral 0.5 keeps ATS-only jobs
+  // (Greenhouse/Ashby/Lever/LinkedIn/Indeed/Glassdoor) eligible for auto-apply
+  // while still penalising them relative to jobs with a verifiable skill match.
+  const skillsScore = descriptionAvailable ? Math.min(matchedSkills.length / 3, 1.0) : 0.5;
 
-  // ── Seniority (whole-word tokens) ──────────────────────────────────────
-  const seniorHits = textContainsAny(`${titleLower} ${descLower}`, SENIOR_TOKENS);
-  const juniorHits = textContainsAny(`${titleLower} ${descLower}`, JUNIOR_TOKENS);
-  const midHits    = textContainsAny(`${titleLower} ${descLower}`, MID_TOKENS);
+  // ── Seniority (whole-word tokens, title only) ──────────────────────────
+  // Descriptions often mention "senior engineers" generically, which made
+  // junior/mid roles look senior. The title is the reliable signal.
+  const seniorHits = textContainsAny(titleLower, SENIOR_TOKENS);
+  const juniorHits = textContainsAny(titleLower, JUNIOR_TOKENS);
+  const midHits    = textContainsAny(titleLower, MID_TOKENS);
 
   let detectedLevel: string | null = null;
   if (seniorHits.length > 0)      detectedLevel = 'senior';
@@ -214,9 +226,9 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
   const fullTextLower = `${titleLower} ${descLower} ${locationLower}`;
 
   const isGhana = GHANA_KEYWORDS.some(k =>
-    locationLower.includes(k) ||
+    hasWholeWord(locationLower, k) ||
     hasWholeWord(titleLower, k) ||
-    (locationLower.trim() === '' && fullTextLower.includes(k))
+    (locationLower.trim() === '' && hasWholeWord(fullTextLower, k))
   );
 
   const ONSITE_OR_HYBRID_TOKENS = [
@@ -230,11 +242,18 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     'office based',
   ];
 
+  // Only the location may mark a role as on-site/hybrid. A title such as
+  // "Hybrid Cloud Engineer" refers to hybrid cloud infrastructure, not a
+  // hybrid work arrangement.
   const hasOnsiteOrHybridIndicator = ONSITE_OR_HYBRID_TOKENS.some(token =>
-    locationLower.includes(token) || hasWholeWord(titleLower, token)
+    hasWholeWord(locationLower, token)
   );
 
-  const REMOTE_TITLE_OR_LOC_TOKENS = [
+  // Location-only tokens are safe in a location string ("Global", "EMEA",
+  // "Distributed") but ambiguous in titles ("Global Infrastructure Engineer",
+  // "Distributed Systems Engineer"). Title matching uses only unambiguous
+  // remote-work wording.
+  const REMOTE_LOCATION_TOKENS = [
     'remote',
     'worldwide',
     'anywhere',
@@ -245,6 +264,21 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     'telecommute',
     'distributed',
     'virtual',
+    'remote-first',
+    'remote first',
+    'work from anywhere',
+  ];
+
+  const REMOTE_TITLE_TOKENS = [
+    'remote',
+    'worldwide',
+    'anywhere',
+    'work from home',
+    'wfh',
+    'telecommute',
+    'remote-first',
+    'remote first',
+    'work from anywhere',
   ];
 
   const EXPLICIT_REMOTE_DESC_PHRASES = [
@@ -265,11 +299,23 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
     'remote eligible',
   ];
 
-  const hasRemoteInTitleOrLoc = REMOTE_TITLE_OR_LOC_TOKENS.some(k =>
-    hasWholeWord(locationLower, k) || hasWholeWord(titleLower, k)
+  const hasRemoteInTitleOrLoc =
+    REMOTE_LOCATION_TOKENS.some(k => hasWholeWord(locationLower, k)) ||
+    REMOTE_TITLE_TOKENS.some(k => hasWholeWord(titleLower, k));
+
+  // "This is not a remote position" contains the phrase "remote position";
+  // without this guard the description signal would classify an on-site role
+  // as remote. Location/title remote signals still take precedence.
+  const DESCRIPTION_REMOTE_NEGATIONS = [
+    'not remote', 'no remote', 'non-remote', 'not a remote',
+    'remote work is not', 'remote is not', 'not fully remote',
+    'not 100% remote', 'not eligible for remote',
+  ];
+  const descriptionSaysNotRemote = DESCRIPTION_REMOTE_NEGATIONS.some(phrase =>
+    descLower.includes(phrase)
   );
 
-  const hasExplicitRemoteInDesc = EXPLICIT_REMOTE_DESC_PHRASES.some(phrase =>
+  const hasExplicitRemoteInDesc = !descriptionSaysNotRemote && EXPLICIT_REMOTE_DESC_PHRASES.some(phrase =>
     descLower.includes(phrase)
   );
 
@@ -338,7 +384,7 @@ export function scoreJob(job: NormalizedJob, options: ScoringOptions): ScoringRe
 
   const breakdown: MatchBreakdown = {
     title_match:    { score: titleScore,     weight: WEIGHTS.title_match,    matched_keywords: matchedTitleKeywords },
-    skills_overlap: { score: skillsScore,    weight: WEIGHTS.skills_overlap, matched_skills: matchedSkills },
+    skills_overlap: { score: skillsScore,    weight: WEIGHTS.skills_overlap, matched_skills: matchedSkills, description_available: descriptionAvailable },
     seniority:      { score: seniorityScore, weight: WEIGHTS.seniority,      detected_level: detectedLevel },
     location:       { score: locationScore,  weight: WEIGHTS.location,       accepted: locationAccepted },
     recency:        { score: recency,        weight: WEIGHTS.recency,        days_old: days },

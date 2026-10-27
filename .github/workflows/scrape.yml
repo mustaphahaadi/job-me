@@ -7,6 +7,15 @@ on:
   workflow_dispatch:
     # Allows manual "Run now" trigger from the Sources page via GitHub API
 
+# Never let two scheduled/manual runs overlap: they would race on job status
+# transitions, auto-apply attempts, and source failure counters.
+concurrency:
+  group: job-me-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   pipeline:
     name: Run pipeline
@@ -55,11 +64,20 @@ jobs:
 
           echo "Resolved CV path from DB: ${CV_FILE_PATH_DB}"
 
+          # Preserve the stored extension so legacy .doc/.docx CVs are not
+          # renamed to .pdf (ATS uploads can reject mismatched extensions).
+          CV_EXT=$(printf '%s' "$CV_FILE_PATH_DB" | sed 's/.*\.//' | tr '[:upper:]' '[:lower:]')
+          case "$CV_EXT" in
+            pdf|doc|docx) ;;
+            *) CV_EXT=pdf ;;
+          esac
+          ENCODED_CV_PATH=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$CV_FILE_PATH_DB")
+
           if curl -fsSL \
-            "${SUPABASE_URL}/storage/v1/object/cv-files/${CV_FILE_PATH_DB}" \
+            "${SUPABASE_URL}/storage/v1/object/cv-files/${ENCODED_CV_PATH}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -o /tmp/resume.pdf; then
-            echo "CV_FILE_PATH=/tmp/resume.pdf" >> "$GITHUB_ENV"
+            -o "/tmp/resume.${CV_EXT}"; then
+            echo "CV_FILE_PATH=/tmp/resume.${CV_EXT}" >> "$GITHUB_ENV"
           else
             echo "CV download failed — the pipeline will retry downloads per job."
           fi
@@ -69,7 +87,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CV_FILE_PATH: ${{ env.CV_FILE_PATH }}
+          # CV_FILE_PATH is written to $GITHUB_ENV by the fallback-download step
+          # and is inherited automatically; do not set it to an empty value here.
           # Applicant credentials for auto-apply connectors
           APPLICANT_FIRST_NAME: ${{ secrets.APPLICANT_FIRST_NAME }}
           APPLICANT_LAST_NAME: ${{ secrets.APPLICANT_LAST_NAME }}
@@ -79,3 +98,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # Optional: override the default model (e.g. openai/gpt-4o-mini or google/gemini-2.5-flash)
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL || vars.OPENROUTER_MODEL || '' }}
+          # Keep browser runs headless in CI. Set PLAYWRIGHT_HEADLESS=false locally to watch.
+          PLAYWRIGHT_HEADLESS: 'true'
+          # Unknown apply pages are routed to the manual queue unless this is
+          # explicitly enabled. Safer default: never fill an arbitrary form.
+          ALLOW_GENERIC_AUTO_APPLY: ${{ vars.ALLOW_GENERIC_AUTO_APPLY || 'false' }}

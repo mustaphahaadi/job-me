@@ -1,6 +1,6 @@
 import type { Source, NormalizedJob, Settings } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { buildUrl, isJobRelevantToProfile } from './utils.js';
+import { buildUrl, isJobRelevantToProfile, stripHtml } from './utils.js';
 
 type GreenhouseJob = {
   id?: number;
@@ -10,6 +10,8 @@ type GreenhouseJob = {
   updated_at?: string;
   metadata?: unknown[];
   departments?: Array<{ name?: string }>;
+  /** Present when the list endpoint is called with ?content=true. */
+  content?: string;
 };
 
 /**
@@ -24,7 +26,11 @@ type GreenhouseJob = {
  */
 export class GreenhouseApiConnector implements Connector {
   async fetch(source: Source, settings?: Settings): Promise<NormalizedJob[]> {
-    const url = buildUrl(source.base_url, source.query_params as Record<string, string>);
+    // Greenhouse omits the description from the list endpoint unless content=true.
+    const url = buildUrl(source.base_url, {
+      ...(source.query_params as Record<string, string>),
+      content: 'true',
+    });
 
     const res = await fetch(url, {
       headers: {
@@ -44,15 +50,16 @@ export class GreenhouseApiConnector implements Connector {
       .filter(j => {
         if (!j.absolute_url || !j.title) return false;
         const loc = j.location?.name ?? '';
-        return isJobRelevantToProfile(j.title, loc, settings);
+        const description = stripHtml(j.content);
+        return isJobRelevantToProfile(j.title, loc, settings, description);
       })
       .map((j): NormalizedJob => ({
         title: (j.title ?? '').trim() || 'Untitled Job',
         company: extractCompanyFromUrl(source.base_url),
         url: j.absolute_url!,
         posted_date: j.updated_at ? j.updated_at.split('T')[0]! : null,
-        description: null,
-        raw_location: j.location?.name ?? 'Remote',
+        description: stripHtml(j.content),
+        raw_location: j.location?.name ?? null,
         raw_tags: j.departments?.map(d => d.name ?? '').filter(Boolean) ?? [],
       }));
   }

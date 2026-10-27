@@ -13,18 +13,23 @@ import styles from './Dashboard.module.css';
 async function fetchAllJobs(): Promise<Job[]> {
   const all: Job[] = [];
   const chunkSize = 1000;
-  let offset = 0;
+  let lastId: string | null = null;
   while (true) {
-    const { data, error } = await supabase
+    // Keyset pagination by id is stable even if the pipeline inserts or updates
+    // rows while the dashboard is loading. The list is sorted client-side.
+    let query = supabase
       .from('jobs')
       .select('*')
-      .order('scraped_at', { ascending: false })
-      .range(offset, offset + chunkSize - 1);
+      .order('id', { ascending: true })
+      .limit(chunkSize);
+    if (lastId) query = query.gt('id', lastId);
+
+    const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
     all.push(...(data as Job[]));
+    lastId = (data[data.length - 1] as Job).id;
     if (data.length < chunkSize) break;
-    offset += chunkSize;
   }
   return all;
 }
@@ -68,7 +73,12 @@ function applyFilters(jobs: Job[], filters: FilterState, activeStatus: JobStatus
 
   if (filters.maxDaysOld < 90) {
     const cutoff = Date.now() - filters.maxDaysOld * 86400_000;
-    out = out.filter(j => !j.posted_date || new Date(j.posted_date).getTime() >= cutoff);
+    out = out.filter(j => {
+      if (!j.posted_date) return true;
+      const timestamp = new Date(j.posted_date).getTime();
+      // Unknown/invalid dates are kept; recency scoring handles them neutrally.
+      return !Number.isFinite(timestamp) || timestamp >= cutoff;
+    });
   }
 
   if (filters.minMatchScore > 0)
@@ -79,9 +89,13 @@ function applyFilters(jobs: Job[], filters: FilterState, activeStatus: JobStatus
       case 'posted_date':  return (b.posted_date ?? '').localeCompare(a.posted_date ?? '');
       case 'match_score':  return (b.match_score ?? 0) - (a.match_score ?? 0);
       case 'days_old': {
-        const aAge = a.posted_date ? Date.now() - new Date(a.posted_date).getTime() : -1;
-        const bAge = b.posted_date ? Date.now() - new Date(b.posted_date).getTime() : -1;
-        return aAge - bAge;
+        const age = (date: string | null): number => {
+          if (!date) return Number.MAX_SAFE_INTEGER;
+          const timestamp = new Date(date).getTime();
+          if (!Number.isFinite(timestamp)) return Number.MAX_SAFE_INTEGER;
+          return Math.max(0, Date.now() - timestamp);
+        };
+        return age(a.posted_date) - age(b.posted_date);
       }
       default: return (b.scraped_at ?? '').localeCompare(a.scraped_at ?? '');
     }
@@ -115,6 +129,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
   const [autoApplyThreshold, setAutoApplyThreshold] = useState(0.75);
+  const [defaultDaysOld, setDefaultDaysOld] = useState(14);
 
   // ── Selection state ───────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -172,7 +187,9 @@ export default function Dashboard() {
         }
         if (cvRes.data) setCvVersions(cvRes.data as CvVersion[]);
         if (settings) {
-          setFilters(f => ({ ...f, maxDaysOld: settings.days_posted_default }));
+          const days = settings.days_posted_default ?? 14;
+          setDefaultDaysOld(days);
+          setFilters(f => ({ ...f, maxDaysOld: days }));
           setAutoApplyThreshold(settings.auto_apply_score_threshold ?? 0.75);
         }
       } finally {
@@ -210,6 +227,8 @@ export default function Dashboard() {
     setSelectedIds(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
   }
 
+  const handleCloseDrawer = useCallback(() => setSelectedJob(null), []);
+
   /** Delete a single job (called from drawer). */
   const handleDeleteJob = useCallback(async (jobId: string) => {
     if (!confirm('Delete this job? This cannot be undone.')) return;
@@ -244,10 +263,17 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds]);
 
-  /** Delete all closed/unmatched jobs (score below promotion threshold or status=new). */
+  /** Delete closed or genuinely low-score jobs. Never delete applied/responded
+   *  jobs or manual-queue entries the user may still want to review. */
   const handleDeleteUnmatched = useCallback(async () => {
     const ids = jobs
-      .filter(j => j.status === 'new' || j.status === 'closed' || (j.match_score ?? 0) < MATCH_PROMOTION_THRESHOLD)
+      .filter(j =>
+        j.status !== 'auto_applied' &&
+        j.status !== 'manual_applied' &&
+        j.status !== 'manual_queue' &&
+        j.status !== 'responded' &&
+        (j.status === 'closed' || (j.match_score != null && j.match_score < MATCH_PROMOTION_THRESHOLD))
+      )
       .map(j => j.id);
     if (ids.length === 0) { alert('No low-score or closed jobs to delete.'); return; }
     if (!confirm(`Delete ${ids.length} low-score / closed job${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
@@ -295,8 +321,8 @@ export default function Dashboard() {
       ? (cvVersions.find(c => c.id === job.cv_version_id) ?? null)
       : selectCv(job.title);
     const nextStatus: JobStatus = 'manual_applied';
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: nextStatus } : j));
-    setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: nextStatus } : prev);
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: nextStatus, cv_version_id: cv?.id ?? null, auto_apply_error: null } : j));
+    setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: nextStatus, cv_version_id: cv?.id ?? null, auto_apply_error: null } : prev);
     try {
       // One application row per job (unique index on applications.job_id) —
       // skip the insert if one already exists (e.g. re-marking after a reload).
@@ -311,11 +337,15 @@ export default function Dashboard() {
           .insert({ job_id: jobId, method: 'manual', cv_version_id: cv?.id ?? null });
         if (appErr) throw appErr;
       }
-      const { error } = await supabase.from('jobs').update({ status: nextStatus, cv_version_id: cv?.id ?? null }).eq('id', jobId);
+      const { error } = await supabase.from('jobs').update({
+        status: nextStatus,
+        cv_version_id: cv?.id ?? null,
+        auto_apply_error: null,
+      }).eq('id', jobId);
       if (error) throw error;
     } catch (err) {
-      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status } : j));
-      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status } : prev);
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status, cv_version_id: job.cv_version_id, auto_apply_error: job.auto_apply_error } : j));
+      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status, cv_version_id: job.cv_version_id, auto_apply_error: job.auto_apply_error } : prev);
       console.error('[handleMarkApplied]', err);
       alert('Failed to mark as applied.');
     }
@@ -357,14 +387,14 @@ export default function Dashboard() {
   const handleRequeue = useCallback(async (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'matched', auto_apply_result: null } : j));
-    setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'matched', auto_apply_result: null } : prev);
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'matched', auto_apply_result: null, auto_apply_error: null } : j));
+    setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: 'matched', auto_apply_result: null, auto_apply_error: null } : prev);
     try {
       const { error } = await supabase.from('jobs').update({ status: 'matched', auto_apply_result: null, auto_apply_error: null }).eq('id', jobId);
       if (error) throw error;
     } catch (err) {
-      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status, auto_apply_result: job.auto_apply_result } : j));
-      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status, auto_apply_result: job.auto_apply_result } : prev);
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: job.status, auto_apply_result: job.auto_apply_result, auto_apply_error: job.auto_apply_error } : j));
+      setSelectedJob(prev => prev?.id === jobId ? { ...prev, status: job.status, auto_apply_result: job.auto_apply_result, auto_apply_error: job.auto_apply_error } : prev);
       console.error('[handleRequeue]', err);
       alert('Failed to re-queue job.');
     }
@@ -415,7 +445,7 @@ export default function Dashboard() {
       <PipelineSidebar activeStatus={activeStatus} counts={sidebarCounts} onSelect={setActiveStatus} />
 
       <div className={styles.main}>
-        <FilterBar sources={sources} filters={filters} onChange={setFilters} />
+        <FilterBar sources={sources} filters={filters} defaultDaysOld={defaultDaysOld} onChange={setFilters} />
 
         {/* ── Summary bar ──────────────────────────────────────── */}
         <div className={styles.summaryBar}>
@@ -459,7 +489,7 @@ export default function Dashboard() {
             <button
               className={styles.deleteUnmatchedBtn}
               onClick={handleDeleteUnmatched}
-              title={`Delete all jobs with score < ${Math.round(MATCH_PROMOTION_THRESHOLD * 100)}% or status = closed/new`}
+              title={`Delete closed jobs and jobs scoring below ${Math.round(MATCH_PROMOTION_THRESHOLD * 100)}% (never applied, responded, or manual-queue jobs)`}
             >
               <Trash2 size={12} />
               Clean up
@@ -545,7 +575,7 @@ export default function Dashboard() {
         cvVersions={cvVersions}
         sourceName={selectedJob?.source_id ? sourceMap[selectedJob.source_id] : undefined}
         autoApplyThreshold={autoApplyThreshold}
-        onClose={() => setSelectedJob(null)}
+        onClose={handleCloseDrawer}
         onMarkApplied={handleMarkApplied}
         onMarkResponded={handleMarkResponded}
         onDismiss={handleDismiss}

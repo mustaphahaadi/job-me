@@ -21,8 +21,8 @@ A TypeScript monorepo managed with `pnpm` workspaces, split into three concerns:
 job-me/
 ├── apps/web/          → React 18 + Vite SPA (the dashboard)
 ├── packages/
-│   ├── shared/        → Types, 5-signal scoring engine, Supabase client factory, Gemini client
-│   └── scraper/       → Pipeline runner, 9 connector types, Playwright auto-apply
+│   ├── shared/        → Types, 5-signal scoring engine, Supabase client factory, OpenRouter client
+│   └── scraper/       → Pipeline runner, 12 connector types, Playwright auto-apply
 ├── supabase/
 │   ├── schema.sql     → Single-file idempotent schema (tables + RLS + seed)
 │   └── functions/     → trigger-pipeline edge function (GitHub dispatch)
@@ -55,10 +55,11 @@ Five tables, defined in a single idempotent `schema.sql` (safe to re-run on an e
 Key schema decisions implemented:
 - `jobs.url` is `UNIQUE` — deduplication key for upserts
 - `jobs.match_breakdown JSONB` — stores per-signal scores, not just the final number
+- `jobs.enriched_at` — marks AI-enriched jobs so each posting is analysed once
 - `sources.consecutive_fail_count` — tracks repeated failures for alerting
 - `jobs.status` CHECK includes seven values: `new`, `matched`, `auto_applied`, `manual_applied`, `manual_queue`, `responded`, `closed`
-- RLS policies: anon/authenticated reads for frontend; service-role key for scraper writes
-- Indexes on `jobs(status)`, `jobs(scraped_at DESC)`, `jobs(match_score DESC)`, `jobs(source_id)`
+- RLS policies: the current no-login app grants anon/authenticated CRUD for the dashboard; the scraper uses the service-role key. Authenticated-only RLS is tracked as a security follow-up.
+- Indexes on `jobs(status)`, `jobs(scraped_at DESC)`, `jobs(match_score DESC)`, `jobs(source_id)`, `jobs(enriched_at)`
 
 ---
 
@@ -68,19 +69,21 @@ Runs as a GitHub Actions workflow every 6 hours (or on manual dispatch). Four se
 
 #### Stage 1 — Scrape (`pipeline/scrape.ts`)
 - Fetches all `active = true` sources from the database
-- Routes each source to the correct connector (9 types: rss, api, generic_web, linkedin, indeed, glassdoor, otta, jobicy, arbeitnow)
-- **Every source is scraped with the /settings configuration applied**: `{roles}` / `{role}` / `{locations}` / `{location}` / `{days}` placeholders in `base_url` and `query_params` are substituted from settings (all 9 connector types, including generic web pages where search terms live in the URL); sources with no query params at all get settings-derived defaults (first target role, first accepted location, `days_posted_default` recency window where the API supports it)
+- Routes each source to the correct connector (rss, api, generic_web, linkedin, indeed, glassdoor, otta, jobicy, arbeitnow, greenhouse, ashby, lever)
+- **Every source is scraped with the /settings configuration applied**: `{roles}` / `{role}` / `{locations}` / `{location}` / `{days}` placeholders in `base_url` and `query_params` are substituted from settings (all connector types, including generic web pages where search terms live in the URL); sources with no query params at all get settings-derived defaults (first target role, first accepted location, `days_posted_default` recency window where the API supports it)
 - Per-source failure isolation: one broken source never stops the rest
-- Upsert strategy (3 queries instead of N+1):
-  1. Fetch all existing URLs in one query
-  2. Batch INSERT new jobs
-  3. Single `upsert(onConflict: 'url')` for existing jobs — description/posted_date only, never resets a job's status
+- Upsert strategy (chunked to stay within PostgREST request limits):
+  1. Fetch existing URLs in chunks of 50
+  2. Batch INSERT new jobs in chunks of 50
+  3. Chunked `upsert(onConflict: 'url')` for existing jobs — refreshes title/company/location/description/posted_date, never resets a job's status
 - Updates `last_scraped_at`, `last_scrape_status`, `last_scrape_error`, and `consecutive_fail_count` per source regardless of outcome
 
 #### Stage 2 — Enrich (`pipeline/enrich.ts`)
-- Calls Gemini (`gemini-2.5-flash`, optional — skipped without `GEMINI_API_KEY`)
+- Calls OpenRouter (default `google/gemini-2.5-flash`, optional — skipped without `OPENROUTER_API_KEY`)
+- Processes un-enriched `new` **and** `matched` jobs (scrape pre-promotes high scorers, so scanning only `new` skipped the spam filter)
 - Detects spam/fake postings → immediately `closed`
-- Confirms remote status → sets `raw_location = 'Remote'` when empty
+- Confirms remote status → sets `raw_location = 'Remote'` when empty or a placeholder like "Unknown"
+- Sets `enriched_at` after a successful AI result so jobs are not re-analysed every run
 - Never modifies the job description (AI summaries used to stack on every run and inflate the skills signal)
 
 #### Stage 3 — Match (`pipeline/match.ts`)
@@ -89,17 +92,19 @@ Runs as a GitHub Actions workflow every 6 hours (or on manual dispatch). Four se
   - `new` → `matched` at score ≥ `MATCH_PROMOTION_THRESHOLD` (0.40) with accepted location
   - `matched` stays `matched` unless closed
   - `manual_queue` is never auto-promoted — re-queueing is an explicit user action
-- Negative keyword / rejected location / score < 0.25 → `closed`
+- Negative keyword / rejected location / score < 0.25 → `closed` (the low-score rule does not close `manual_queue` jobs)
 - Updates `match_score`, `match_breakdown`, `matched_keywords`, and `status`
 
 #### Stage 4 — Auto-Apply (`pipeline/auto-apply.ts`)
 - Fetches `status = 'matched'` jobs at or above `auto_apply_score_threshold`
-- Looks up a registered ATS connector by matching the job URL against known patterns
-- Selects the best CV by matching `is_default_for` role tags against the job title, and **downloads that CV's file** from Supabase Storage (cached per run) — `CV_FILE_PATH` env is only a fallback
+- Looks up a registered ATS connector by parsing the job URL hostname (not substring matching)
+- Selects the best CV by matching `is_default_for` role tags against the job title, and **downloads that CV's file** from Supabase Storage (cached per run, original extension preserved) — `CV_FILE_PATH` env is only a fallback
+- Validates `APPLICANT_FIRST_NAME`, `APPLICANT_LAST_NAME`, and `APPLICANT_EMAIL` before touching any job; missing values skip the step instead of submitting placeholders
 - Rate cap: `max_auto_apply_per_run` attempts (successes **and** failures) per run
 - On success: `status → auto_applied`, inserts into `applications`
 - On failure or no connector: `status → manual_queue` with error detail stored — never leaves a job in limbo
-- Detects reCAPTCHA/hCaptcha walls before submitting and fails with a clear `captcha_detected` error
+- Unknown apply pages go to the Manual Queue unless `ALLOW_GENERIC_AUTO_APPLY=true` is explicitly set
+- Detects reCAPTCHA/hCaptcha/Turnstile walls before submitting and fails with a clear `captcha_detected` error
 
 ---
 
@@ -128,9 +133,9 @@ The remaining seven connector types live alongside them: `generic_web` (Playwrig
 **`GreenhouseConnector`** — Playwright-based Greenhouse ATS form filler:
 - Fills first name, last name, email, phone
 - Uploads CV via `input[type="file"]`
-- Submits and waits for confirmation text or URL change
+- Submits and waits for explicit confirmation text; a URL change alone is not treated as success
 - Throws descriptive errors on each failure point (no file input found, submit button missing, no confirmation)
-- Registered in a URL-pattern registry in `auto-apply.ts` — adding a new ATS = adding one entry to the registry
+- Direct ATS domains are registered in `auto-apply-connectors/ats.ts` and matched on the parsed hostname, never on the full URL string
 
 ---
 
@@ -141,10 +146,10 @@ Shared between the scraper and frontend so scores are always calculated identica
 | Signal | Weight | Logic |
 |---|---|---|
 | Title match | 40% | Whole-word overlap against target roles; initialisms (SRE ↔ Site Reliability Engineer) match; no role words → entire score forced to 0 |
-| Skills overlap | 30% | Count of whole-word skill vocabulary matches in description, normalized at 3 matches = 100% |
-| Seniority | 15% | Detects senior/mid/junior tokens (whole-word only — "middle" ≠ "mid"); exact = 1.0, adjacent = 0.5, wrong level = 0.1, undetected = 0.5 neutral |
-| Location | 10% | Settings-driven: 1.0 for listed Ghana locations, 0.95 for listed remote locations, 0.8 for other listed locations; unlisted → rejected and closed; empty list accepts all |
-| Recency | 5% | Exponential decay `e^(-days/14)` — 14-day-old post scores ~37% on this signal |
+| Skills overlap | 30% | Count of whole-word skill vocabulary matches in description, normalized at 3 matches = 100%; neutral 50% when the source provides no description |
+| Seniority | 15% | Detects senior/mid/junior tokens in the job title (whole-word only — "middle" ≠ "mid"); exact = 1.0, adjacent = 0.5, wrong level = 0.1, undetected = 0.6 neutral |
+| Location | 10% | Ghana roles accepted on-site or remote (1.0); foreign roles must be remote (0.95); foreign on-site → rejected and closed; empty accepted-locations list does not override the remote-only rule |
+| Recency | 5% | Exponential decay `e^(-days/14)` — 14-day-old post scores ~37% on this signal; invalid/future dates are neutral |
 
 - Negative keyword check runs first as a hard stop — forces score to 0 and status to `closed`
 - All per-signal scores, weights, and matched tokens stored in `match_breakdown JSONB`
@@ -162,9 +167,9 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 **Dashboard (`/`)**
 - Pipeline sidebar with live counts per stage — click to filter the job list. The six fixed stages are New, Matched, Auto-Applied, Manual Queue, Responded, Closed; `manual_applied` jobs group under Auto-Applied
 - Filter bar: source multi-select, role keyword text search, days-since-posted range, match score threshold, sort order
-- Job list with Supabase Realtime subscription (INSERT/UPDATE/DELETE events update the list live) and pagination (200 per page, "Load more")
+- Job list with Supabase Realtime subscription (INSERT/UPDATE/DELETE events update the list live); jobs are loaded in 1000-row chunks, and server-side pagination remains an open improvement
 - Summary bar: high-match count (at the configured auto-apply threshold), manual queue count, auto-applied count
-- "Delete unmatched jobs" bulk action with optimistic UI and rollback on failure
+- "Clean up" bulk action deletes closed and known low-score jobs only (never applied, responded, or manual-queue jobs) with optimistic UI and rollback on failure
 - Empty states with spec-compliant copy
 
 **Job Detail Drawer**
@@ -173,7 +178,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 - Match score breakdown with per-signal bar chart (score × weight = contribution) and the auto-apply eligibility line (score vs threshold)
 - Full pipeline track (large, with labels)
 - CV version selector (swap before manual apply)
-- Actions: Mark as applied (`manual_applied`), Mark responded (`responded`, for applied jobs), Dismiss, Re-queue for auto-apply retry (shown only on failed auto-apply)
+- Actions: Mark as applied (`manual_applied`), Mark responded (`responded`, for applied jobs), Dismiss, Re-queue for auto-apply retry (shown on failed auto-apply and manual-queue jobs)
 - Auto-apply error block (shown when `auto_apply_error` is set)
 - Activity log: scraped_at, matched keywords, auto-apply attempt timestamp + result
 
@@ -182,7 +187,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 - Consecutive fail count alert banner (triggers at ≥ 3 failures)
 - Per-source inline error message with last error text
 - Add/edit source form (modal) with JSON query params textarea
-- Per-source "Run now" button and global "Run all sources" button — both dispatch `workflow_dispatch` via the GitHub API using `VITE_GITHUB_PAT` (optional `trigger-pipeline` edge function keeps the PAT server-side instead)
+- Per-source "Run now" button and global "Run all sources" button — both invoke the server-side `trigger-pipeline` Supabase Edge Function, which dispatches `workflow_dispatch` using a PAT stored only in function secrets
 - Active/inactive toggle per source (optimistic, with rollback and error feedback on failure)
 
 **CV Versions (`/cv`)**
@@ -216,7 +221,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 
 ### 7. GitHub Actions Workflow (`.github/workflows/scrape.yml`)
 
-- Triggers: `schedule` (every 6 hours) + `workflow_dispatch` (manual, via the GitHub API using `VITE_GITHUB_PAT`; the `trigger-pipeline` edge function is an optional server-side alternative)
+- Triggers: `schedule` (every 6 hours) + `workflow_dispatch` (manual, via the server-side `trigger-pipeline` Edge Function or the GitHub UI); a `concurrency` group prevents overlapping runs
 - Optionally downloads the newest CV from Supabase Storage into `/tmp/resume.pdf` as a fallback (never fails the run)
 - Installs Playwright Chromium with system deps for auto-apply
 - Runs `pnpm pipeline` with all secrets injected as environment variables
@@ -235,36 +240,35 @@ The following issues from the original review have been addressed:
 - **Manual applications showed as AUTO-APPLIED** — new `manual_applied` status (schema CHECK, status tag, pipeline-track slot 2, groups under Auto-Applied in the sidebar).
 - **Silent source save/delete/toggle failures** — all Sources handlers report errors and roll back optimistic updates.
 - **`buildUrl`/`toIsoDate` duplication** — shared in `connectors/utils.ts` alongside `sanitizeLog` and `extractLocationFromText`.
-- **Per-row batch updates in `scrape.ts`** — single `upsert(onConflict: 'url')`.
+- **Per-row batch updates in `scrape.ts`** — chunked batch insert/upsert to avoid PostgREST request-size limits.
 - **Hardcoded rate cap** — `settings.max_auto_apply_per_run`; counts attempts (successes and failures).
 - **CV selection drift** — `selectCvForTitle()` lives in `@job-me/shared` and is used by both the dashboard and the scraper; auto-apply downloads the matched CV's file per job.
-- **CAPTCHA handling** — Greenhouse/Lever/Workday detect reCAPTCHA/hCaptcha and fail with a specific `captcha_detected` error.
-- **No pagination** — dashboard loads 200 jobs per page with a "Load more" button.
+- **CAPTCHA handling** — Greenhouse/Lever/Workday detect reCAPTCHA/hCaptcha/Turnstile and fail with a specific `captcha_detected` error.
 - **Lever connector** — implemented and registered.
 - **Hardcoded skill vocabulary** — editable in Settings (`settings.skill_vocabulary`).
 - **Dead `src/` scaffolding and stray `package-lock.json`** — removed.
 - **Design-token drift** — `tokens.css` palette uses the exact spec §2 hexes, radius 6/4px, no drop shadows (1px `--border` + raised surface instead); six `color: #fff` rules now use `var(--text)`.
-- **Scoring false positives** — whole-word matching for skills/seniority/negative keywords; no generic title aliases; irrelevant titles score 0; empty accepted-locations list accepts every location.
+- **Scoring false positives** — whole-word matching for skills/seniority/negative keywords; no generic title aliases; irrelevant titles score 0; foreign on-site roles remain rejected even with an empty accepted-locations list.
 - **Enrichment stacking** — the enrich step no longer rewrites the job description (summaries used to stack on every run and inflate the skills signal).
-- **PAT in frontend** — the GitHub PAT originally lived in the frontend bundle; it was moved to a `trigger-pipeline` edge function, then returned to the API-based trigger at the owner's request (users are non-technical). The edge function remains in the repo as an optional server-side alternative — README documents both.
-- **Match-status flapping** — only `new` jobs can be promoted to `matched`; `manual_queue` jobs are never auto-promoted.
+- **PAT in frontend** — the GitHub PAT now lives only in the `trigger-pipeline` Edge Function's secrets; the frontend calls the function with the anon key and never bundles a repo-scoped token.
+- **Match-status flapping** — only `new` jobs can be promoted to `matched`; `manual_queue` jobs are never auto-promoted and are not closed by low score alone.
 
 ### Still open
 
 **1. Dependency advisories**
 `react-router-dom` 6.x has a low-impact SSR deserialization advisory (this is a CSR-only SPA), and `esbuild`'s dev-server CORS setting is dev-only. Worth bumping at the next dependency refresh; `vitest` (3.2.7) and `vite` (6.4.3) are already on fixed versions.
 
-**2. RSS connector — location extraction is limited**
-`extractLocation` in `rss.ts` only checks `dc:publisher`, `author`, and `location` fields. Most job-board RSS feeds embed location in the title or description. A regex pass over title/description would improve the location signal.
-
-**3. Email digest**
+**2. Email digest**
 `Settings.tsx` has a stub section. A daily summary of Manual Queue items and auto-apply results could be a Supabase Edge Function on a cron.
 
-**4. Response tracking automation**
+**3. Response tracking automation**
 `responded` and `closed` are still set manually (via the drawer's **Mark responded** action). An email inbox connector could auto-update statuses.
 
-**5. RLS is anon-permissive (owner decision)**
+**4. RLS is anon-permissive (owner decision)**
 Policies grant both `anon` and `authenticated` roles — anyone holding the anon key can read and write. This is deliberate for this single-owner tool, which has no login flow. The original review suggested authenticated-only RLS behind a login page; the owner declined that change. Revisit if the tool is ever shared.
+
+**5. Dashboard loads all jobs**
+`Dashboard.tsx` fetches every job in 1000-row chunks so sidebar counts and client-side filters stay accurate. This is fine for a personal database but will get slow as the table grows; server-side counts plus paginated queries are the next performance step.
 
 ---
 
@@ -277,19 +281,19 @@ Policies grant both `anon` and `authenticated` roles — anyone holding the anon
 | API connector (generic) | Complete |
 | 5-signal scoring engine | Complete |
 | Scrape pipeline stage | Complete |
-| Enrich pipeline stage (Gemini) | Complete |
+| Enrich pipeline stage (OpenRouter) | Complete |
 | Match pipeline stage | Complete |
 | Auto-apply pipeline stage | Complete |
 | Greenhouse / Lever / Workday ATS connectors | Complete |
 | GitHub Actions workflow | Complete |
-| `trigger-pipeline` edge function | Optional alternative (API/PAT trigger is the default) |
-| Dashboard + realtime + pagination | Complete |
+| `trigger-pipeline` edge function | Required for dashboard "Run now" (server-side PAT) |
+| Dashboard + realtime | Complete (server-side pagination still open) |
 | Job detail drawer + breakdown | Complete |
 | Sources management page | Complete |
 | CV versions page (upload, defaults, delete) | Complete |
 | Settings page | Complete |
 | Pipeline track component | Complete |
-| RLS security policies | Complete (anon + authenticated; see "Still open" #5) |
+| RLS security policies | Intentionally anon-permissive (see "Still open" #4) |
 | Email digest | Stub only |
 | Response tracking automation | Not started |
-| RSS location extraction | Partial |
+| RSS location extraction | Complete (custom fields + title/description fallback) |

@@ -1,6 +1,6 @@
 import type { Source, NormalizedJob } from '@job-me/shared';
 import type { Connector } from './base.js';
-import { toIsoDate } from './utils.js';
+import { toIsoDate, stripHtml } from './utils.js';
 
 /**
  * Jobicy connector — https://jobicy.com/api/v2/remote-jobs
@@ -40,7 +40,7 @@ export class JobicyConnector implements Connector {
         company: String(item['companyName'] ?? '').trim() || null,
         url: String(item['url'] ?? ''),
         posted_date: item['pubDate'] ? toIsoDate(String(item['pubDate'])) : null,
-        description: String(item['jobDescription'] ?? item['jobExcerpt'] ?? ''),
+        description: stripHtml(String(item['jobDescription'] ?? item['jobExcerpt'] ?? '')),
         raw_location: String(item['jobGeo'] ?? '').trim() || 'Remote',
         raw_tags: Array.isArray(item['tags']) ? item['tags'].map(String) : [],
       }))

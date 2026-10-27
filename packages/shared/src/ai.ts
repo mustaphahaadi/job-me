@@ -16,7 +16,9 @@ const DEFAULT_MODEL = 'google/gemini-2.5-flash';
 const AI_TIMEOUT_MS = 30_000;
 
 async function callOpenRouter(prompt: string, apiKey: string): Promise<string | null> {
-  const model = process.env['OPENROUTER_MODEL'] ?? DEFAULT_MODEL;
+  // GitHub Actions sets an empty string when an optional secret/variable is
+  // unset, so `??` is not enough — trim and fall back on empty.
+  const model = (process.env['OPENROUTER_MODEL'] ?? '').trim() || DEFAULT_MODEL;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -67,9 +69,10 @@ async function callOpenRouter(prompt: string, apiKey: string): Promise<string | 
   return null;
 }
 
-/** Resolves the API key from env — supports OPENROUTER_API_KEY (primary) and legacy GEMINI_API_KEY (ignored). */
+/** Resolves the OpenRouter API key from env. The legacy GEMINI_API_KEY is not used. */
 function getApiKey(): string | null {
-  return process.env['OPENROUTER_API_KEY'] ?? null;
+  const key = process.env['OPENROUTER_API_KEY']?.trim();
+  return key ? key : null;
 }
 
 /**
