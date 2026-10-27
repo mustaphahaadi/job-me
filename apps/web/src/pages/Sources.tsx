@@ -281,6 +281,9 @@ export default function Sources() {
                 <label className={styles.fieldLabel} htmlFor="src-name">Name</label>
                 <input id="src-name" className={styles.input} required placeholder="e.g. Work at a Startup, Jobicy DevOps" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                <span className={styles.fieldHint}>
+                  A label for this search. It appears on job cards as the source, but it does not filter jobs.
+                </span>
               </div>
               <div className={styles.field}>
                 <label className={styles.fieldLabel} htmlFor="src-type">Type</label>

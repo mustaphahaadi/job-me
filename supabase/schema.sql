@@ -272,7 +272,7 @@ VALUES
   -- ── LinkedIn: Remote (Worldwide & Africa Remote) ──────────────────────────
   ('LinkedIn — DevOps Remote',           'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer",          "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer",           "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
-  ('LinkedIn — AWS Instructor Remote',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "aws instructor trainer",    "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
+  ('LinkedIn — AWS Instructor / Trainer', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "aws instructor trainer",    "location": "Worldwide", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — DevOps Lagos (Remote)',   'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "devops engineer remote",   "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — Cloud Engineer Lagos (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "cloud engineer remote",   "location": "Lagos, Nigeria", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),
   ('LinkedIn — SRE South Africa (Remote)', 'linkedin', 'https://www.linkedin.com/jobs/search', '{"keywords": "site reliability engineer remote", "location": "South Africa", "f_WT": "2", "f_TPR": "r604800"}'::jsonb, true),

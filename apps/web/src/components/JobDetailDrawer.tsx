@@ -185,7 +185,7 @@ export function JobDetailDrawer({
               <div className={styles.headerTop}>
                 <div className={styles.headerMeta}>
                   <StatusTag status={job.status} />
-                  {sourceName && <span className={styles.sourceName}>{sourceName}</span>}
+                  {sourceName && <span className={styles.sourceName}>Source: {sourceName}</span>}
                 </div>
                 <button id="drawer-close-btn" className={styles.closeBtn} onClick={onClose} aria-label="Close">
                   <X size={14} />

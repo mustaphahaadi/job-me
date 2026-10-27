@@ -46,7 +46,7 @@ export function JobCard({ job, sourceName, isSelected, onClick }: Props) {
   const scoreColor = getScoreColor(scorePct === null ? null : scorePct / 100);
 
   const metaItems: Array<{ key: string; node: React.ReactNode }> = [];
-  if (sourceName) metaItems.push({ key: 'source', node: sourceName });
+  if (sourceName) metaItems.push({ key: 'source', node: `Source: ${sourceName}` });
   const badge = ageBadge(job.posted_date);
   if (badge) metaItems.push({
     key: 'age',
