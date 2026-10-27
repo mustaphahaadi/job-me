@@ -190,23 +190,6 @@
 
 .runAllBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.runNowBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-tag);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  padding: 2px var(--space-2);
-  cursor: pointer;
-  transition: border-color var(--duration-base) ease, color var(--duration-base) ease;
-}
-
-.runNowBtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.runNowBtn:disabled { opacity: 0.4; cursor: not-allowed; }
-
 .toggleBtn {
   background: none;
   border: none;

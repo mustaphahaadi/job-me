@@ -187,7 +187,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 - Consecutive fail count alert banner (triggers at ≥ 3 failures)
 - Per-source inline error message with last error text
 - Add/edit source form (modal) with JSON query params textarea
-- Per-source "Run now" button and global "Run all sources" button — both invoke the server-side `trigger-pipeline` Supabase Edge Function, which dispatches `workflow_dispatch` using a PAT stored only in function secrets
+- Global "Run all sources" button appears only when the optional `trigger-pipeline` Edge Function is deployed and configured; it dispatches `workflow_dispatch` using a PAT stored only in function secrets. If the function is absent, the control is hidden and the page relies on scheduled runs — no setup error is shown to users.
 - Active/inactive toggle per source (optimistic, with rollback and error feedback on failure)
 
 **CV Versions (`/cv`)**
@@ -221,7 +221,7 @@ Built with React 18, React Router v6, Lucide React icons, CSS Modules. Design sy
 
 ### 7. GitHub Actions Workflow (`.github/workflows/scrape.yml`)
 
-- Triggers: `schedule` (every 6 hours) + `workflow_dispatch` (manual, via the server-side `trigger-pipeline` Edge Function or the GitHub UI); a `concurrency` group prevents overlapping runs
+- Triggers: `schedule` (every 6 hours) + `workflow_dispatch` (manual, via the optional `trigger-pipeline` Edge Function or the GitHub UI); a `concurrency` group prevents overlapping runs
 - Optionally downloads the newest CV from Supabase Storage into `/tmp/resume.pdf` as a fallback (never fails the run)
 - Installs Playwright Chromium with system deps for auto-apply
 - Runs `pnpm pipeline` with all secrets injected as environment variables
@@ -286,7 +286,7 @@ Policies grant both `anon` and `authenticated` roles — anyone holding the anon
 | Auto-apply pipeline stage | Complete |
 | Greenhouse / Lever / Workday ATS connectors | Complete |
 | GitHub Actions workflow | Complete |
-| `trigger-pipeline` edge function | Required for dashboard "Run now" (server-side PAT) |
+| `trigger-pipeline` edge function | Optional; enables dashboard "Run all sources" and is hidden when not configured |
 | Dashboard + realtime | Complete (server-side pagination still open) |
 | Job detail drawer + breakdown | Complete |
 | Sources management page | Complete |

@@ -13,7 +13,28 @@ import { supabase } from './supabase';
  *   supabase functions deploy trigger-pipeline --no-verify-jwt
  *   supabase secrets set GH_TOKEN=... GITHUB_REPO=owner/repo GITHUB_BRANCH=main
  *
- * Returns true when the function accepted the dispatch.
+ * Manual triggering is optional. The Sources page asks the function whether
+ * it is configured and hides the controls when it is not, so deployments that
+ * only use the 6-hour schedule never show setup errors to end users.
+ */
+
+/** Returns true when the server-side manual trigger is deployed and configured. */
+export async function getTriggerAvailability(): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke('trigger-pipeline', {
+    method: 'GET',
+  });
+
+  if (error) return false;
+  return Boolean(
+    data &&
+    typeof data === 'object' &&
+    (data as { configured?: unknown }).configured === true
+  );
+}
+
+/**
+ * Returns true when the function accepted the dispatch. Detailed errors stay
+ * in the console; the Sources page shows a plain-language fallback message.
  */
 export async function triggerScrapeNow(): Promise<boolean> {
   const { data, error } = await supabase.functions.invoke('trigger-pipeline', {
@@ -22,17 +43,14 @@ export async function triggerScrapeNow(): Promise<boolean> {
 
   if (error) {
     console.error('Pipeline trigger failed:', error.message);
-    alert(
-      `Failed to trigger scrape: ${error.message}. ` +
-      'Check that the trigger-pipeline Edge Function is deployed and GH_TOKEN/GITHUB_REPO are set.'
-    );
     return false;
   }
 
   if (data && typeof data === 'object' && 'error' in data) {
-    const message = String((data as { error?: unknown }).error ?? 'Unknown error');
-    console.error('Pipeline trigger rejected:', message);
-    alert(`Failed to trigger scrape: ${message}`);
+    console.error(
+      'Pipeline trigger rejected:',
+      String((data as { error?: unknown }).error ?? 'Unknown error')
+    );
     return false;
   }
 

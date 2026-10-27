@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Play, AlertTriangle, CheckCircle, XCircle, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import type { Source } from '@job-me/shared';
 import { supabase } from '../lib/supabase';
-import { triggerScrapeNow } from '../lib/github';
+import { getTriggerAvailability, triggerScrapeNow } from '../lib/github';
 import styles from './Sources.module.css';
 
 type FormState = Omit<Source, 'id' | 'last_scraped_at' | 'last_scrape_status' | 'last_scrape_error' | 'consecutive_fail_count' | 'created_at'>;
@@ -14,6 +14,9 @@ const EMPTY_FORM: FormState = {
   query_params: {},
   active: true,
 };
+
+const MANUAL_UNAVAILABLE_MESSAGE =
+  'Manual runs are unavailable right now. Your sources will still run automatically every 6 hours.';
 
 function formatDateTime(dt: string | null): string {
   if (!dt) return 'Never';
@@ -33,7 +36,8 @@ export default function Sources() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [triggeringId, setTriggeringId] = useState<string | null>(null);
+  const [triggeringAll, setTriggeringAll] = useState(false);
+  const [manualTriggerAvailable, setManualTriggerAvailable] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [paramStr, setParamStr] = useState('{}');
 
@@ -41,6 +45,14 @@ export default function Sources() {
     void supabase.from('sources').select('*').order('name').then(({ data }) => {
       if (data) setSources(data as Source[]);
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getTriggerAvailability().then(available => {
+      if (!cancelled) setManualTriggerAvailable(available);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   function openAdd() {
@@ -125,28 +137,22 @@ export default function Sources() {
     }
   }
 
-  async function handleRunNow(src: Source) {
-    setTriggeringId(src.id);
-    try {
-      await triggerScrapeNow();
-    } catch (err) {
-      console.error('[handleRunNow] failed:', err);
-      alert('Failed to trigger scrape run.');
-    } finally {
-      setTriggeringId(null);
-    }
-  }
-
   async function handleRunAll() {
-    setTriggeringId('all');
+    setTriggeringAll(true);
     try {
       const ok = await triggerScrapeNow();
-      if (ok) alert('Triggered pipeline scrape run for all active sources via GitHub Actions.');
+      if (ok) {
+        alert('Run started. New jobs will appear as sources finish.');
+      } else {
+        setManualTriggerAvailable(false);
+        alert(MANUAL_UNAVAILABLE_MESSAGE);
+      }
     } catch (err) {
       console.error('[handleRunAll] failed:', err);
-      alert('Failed to trigger scrape run. Check the trigger-pipeline Edge Function deployment and secrets.');
+      setManualTriggerAvailable(false);
+      alert(MANUAL_UNAVAILABLE_MESSAGE);
     } finally {
-      setTriggeringId(null);
+      setTriggeringAll(false);
     }
   }
 
@@ -159,19 +165,21 @@ export default function Sources() {
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Sources</h1>
-          <p className={styles.pageDesc}>Configure job boards to scrape. Each active source runs every 6 hours via GitHub Actions.</p>
+          <p className={styles.pageDesc}>Configure job boards to scrape. Each active source runs automatically every 6 hours.</p>
         </div>
         <div className={styles.headerBtnGroup}>
-          <button
-            id="sources-run-all-btn"
-            className={styles.runAllBtn}
-            onClick={handleRunAll}
-            disabled={triggeringId === 'all'}
-            title="Trigger full scrape pipeline run for all active sources via GitHub Actions"
-          >
-            <Play size={14} />
-            {triggeringId === 'all' ? 'Triggering all…' : 'Run all sources'}
-          </button>
+          {manualTriggerAvailable && (
+            <button
+              id="sources-run-all-btn"
+              className={styles.runAllBtn}
+              onClick={handleRunAll}
+              disabled={triggeringAll}
+              title="Start a run for all active sources"
+            >
+              <Play size={14} />
+              {triggeringAll ? 'Starting…' : 'Run all sources'}
+            </button>
+          )}
           <button id="sources-add-btn" className={styles.addBtn} onClick={openAdd}>
             <Plus size={14} />
             Add source
@@ -204,16 +212,6 @@ export default function Sources() {
                     </span>
                   </div>
                   <div className={styles.sourceActions}>
-                    <button
-                      id={`source-runnow-${src.id}`}
-                      className={styles.runNowBtn}
-                      onClick={() => handleRunNow(src)}
-                      disabled={triggeringId === src.id}
-                      title="Trigger scrape now via GitHub Actions"
-                    >
-                      <Play size={12} />
-                      {triggeringId === src.id ? 'Triggering…' : 'Run now'}
-                    </button>
                     <button
                       id={`source-toggle-${src.id}`}
                       className={styles.toggleBtn}

@@ -5,6 +5,9 @@
 // Replaces the old VITE_GITHUB_PAT client-side trigger: the PAT now lives only
 // in this function's secrets and never reaches the browser bundle.
 //
+// Manual triggering is optional. If this function is not deployed, the Sources
+// page hides the manual controls and the scheduled 6-hour runs continue.
+//
 // Deploy (this app has no login flow, so deploy WITHOUT JWT verification):
 //   supabase functions deploy trigger-pipeline --no-verify-jwt
 //
@@ -25,7 +28,7 @@
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
 function json(body: Record<string, unknown>, status = 200): Response {
@@ -40,8 +43,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
+  // Lightweight health check used by the Sources page to decide whether to
+  // show manual-run controls. It only reveals whether the secrets exist.
+  if (req.method === 'GET') {
+    return json({
+      configured: Boolean(Deno.env.get('GH_TOKEN') && Deno.env.get('GITHUB_REPO')),
+    });
+  }
+
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed — use POST.' }, 405);
+    return json({ error: 'Method not allowed — use GET or POST.' }, 405);
   }
 
   // New-format Supabase publishable keys are sent as `apikey` rather than as a

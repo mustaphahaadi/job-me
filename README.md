@@ -286,7 +286,7 @@ Deploy the system to run autonomously in the cloud at $0 cost.
 5. In **Environment Variables**, define:
    - `VITE_SUPABASE_URL` = `https://your-project-ref.supabase.co`
    - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
-   - The "Run now" button is optional and uses the server-side `trigger-pipeline` Edge Function — do **not** put a GitHub PAT in Vercel.
+   - Manual runs are optional. If you configure the server-side `trigger-pipeline` Edge Function, a **Run all sources** button appears; otherwise the dashboard relies on the 6-hour schedule. Do **not** put a GitHub PAT in Vercel.
 6. Click **Deploy**. Your dashboard is now active on a global HTTPS URL.
 
 ---
@@ -331,15 +331,16 @@ on:
 
 ---
 
-### Step 4: On-Demand Manual Cloud Trigger
+### Step 4: Optional — On-Demand Manual Cloud Trigger
 
-You do not need to wait for the 6-hour cron schedule:
-- **From Dashboard:** Open the `/sources` page and click **Run now** or **Run all sources**. This invokes the server-side `trigger-pipeline` Supabase Edge Function, which dispatches `workflow_dispatch` using a GitHub PAT stored only in function secrets. Deploy it once:
-  ```bash
-  supabase functions deploy trigger-pipeline --no-verify-jwt
-  supabase secrets set GH_TOKEN=github_pat_... GITHUB_REPO=owner/repo GITHUB_BRANCH=main
-  ```
-- **From GitHub UI:** Go to **Actions -> Run pipeline -> Run workflow**.
+Automatic 6-hour runs need no extra setup. If you want a manual **Run all sources** button, deploy the optional server-side function once:
+```bash
+supabase functions deploy trigger-pipeline --no-verify-jwt
+supabase secrets set GH_TOKEN=github_pat_... GITHUB_REPO=owner/repo GITHUB_BRANCH=main
+```
+The dashboard checks whether the function is deployed and configured. If it is not, the manual controls stay hidden and sources continue running on the 6-hour schedule — no error is shown to users.
+
+You can also trigger a run from **GitHub UI -> Actions -> Run pipeline -> Run workflow**.
 
 ---
 
@@ -360,8 +361,8 @@ Both local execution and the frontend web app resolve settings from root `/.env.
 | `OPENROUTER_MODEL` | Pipeline | Optional | Model identifier (default: `google/gemini-2.5-flash`) |
 | `PLAYWRIGHT_HEADLESS` | Pipeline | Optional | `false` to display Chromium on desktop; `true` for headless |
 | `ALLOW_GENERIC_AUTO_APPLY` | Pipeline | Optional | `true` enables best-effort filling of unrecognised apply pages; default `false` routes them to Manual Queue |
-| `GH_TOKEN` | Supabase Edge Function | Optional [Run now] | GitHub PAT for the `trigger-pipeline` function (never a `VITE_*` variable) |
-| `GITHUB_REPO` | Supabase Edge Function | Optional [Run now] | `owner/repo` target for the pipeline dispatch |
+| `GH_TOKEN` | Supabase Edge Function | Optional [manual runs] | GitHub PAT for the `trigger-pipeline` function (never a `VITE_*` variable) |
+| `GITHUB_REPO` | Supabase Edge Function | Optional [manual runs] | `owner/repo` target for the pipeline dispatch |
 | `GITHUB_BRANCH` | Supabase Edge Function | Optional | Target git branch (default: `main`) |
 
 ---
@@ -422,7 +423,7 @@ Match Score = (Title * 0.40) + (Skills * 0.30) + (Seniority * 0.15) + (Location 
 | Route | Page | Purpose and Functionality |
 |---|---|---|
 | **`/`** | **Dashboard** | Real-time job listing with stage counts (`New`, `Matched`, `Auto-Applied`, `Manual Queue`, `Responded`, `Closed`). Filter bar, sort selection, and slide-in **Job Detail Drawer** displaying 5-signal breakdown charts and cover letters. |
-| **`/sources`** | **Sources** | Manage job boards, view error logs and consecutive failure counts, configure search parameters, and trigger manual cloud pipeline executions via **Run now**. |
+| **`/sources`** | **Sources** | Manage job boards, view error logs and consecutive failure counts, configure search parameters, and — when the optional trigger is configured — start a run with **Run all sources**. |
 | **`/applications`** | **Applications** | Full audit history of all submissions (automated or manual), recording timestamps, CV version used, and match score. |
 | **`/cv`** | **CV Versions** | Upload PDF resumes to Supabase Storage, tag by role classification, and toggle primary defaults per role. |
 | **`/settings`** | **Settings** | Configure target roles, accepted locations, negative keywords, skill vocabulary, auto-apply thresholds, and database maintenance options. |
